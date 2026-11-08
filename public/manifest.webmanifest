@@ -1,0 +1,12 @@
+{
+  "name": "LinguaFlow Reader",
+  "short_name": "LF Reader",
+  "description": "Read with curiosity. Remember in context.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07070e",
+  "theme_color": "#07070e",
+  "icons": [
+    { "src": "/linguaflow-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

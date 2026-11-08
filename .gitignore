@@ -1,0 +1,37 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 系统与编辑器
+.DS_Store
+.idea/
+.vscode/
+
+# 环境变量（AI Key 绝不入库）
+.env
+.env.local
+
+# 由 scripts/copy-ort-assets.mjs 在 dev/build 前生成（14MB ONNX 运行时）
+public/wasm/
+
+# 自托管 Whisper 模型（可选，见 README「本地模型源」）
+public/models/
+
+# —— 第三方版权素材：绝不入库、绝不进公开构建产物 ——
+# 内置扫描书的 226 张页面图 + 有声书音频属于版权内容，不属于 MIT 授权范围。
+# 本机开发可自行放回 public/books/<book>/：dev 直读 public，
+# build 会由 vite.config.ts 的 dropLocalBookAssets() 剔除，dist 可安全公开部署。
+public/books/
+
+# 书籍正文的衍生文本（226 页 OCR 全文 + 3161 行句级时间戳）：
+# 源 TS 只在本机，npm run export:local-content 导出的 JSON 也只在本机，绝不入库。
+src/data/wimpyKidBook.ts
+src/data/wimpyKidAudioMap.ts
+public/local-content/
+
+# QA 截图 / 测试样本可能含书页，同样不随仓库分发
+qa/
+
+# WorkBuddy 会话记忆，非项目源码
+.workbuddy/
