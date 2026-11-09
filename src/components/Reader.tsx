@@ -82,10 +82,11 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   const { src: audioSrc } = useBookAudioSrc(book.id, book.audio);
   const chapter = book.chapters[chapterIndex];
   const canImage = !!book.pageImages && Object.keys(book.pageImages).length > 0;
-  const pageNumber = (() => {
-    const m = chapter.id.match(/page-(\d+)/) || chapter.title.match(/(\d+)/);
-    return m ? Number(m[1]) : chapterIndex + 1;
-  })();
+  // 页码只用于内置扫描书的图片 / OCR 映射。不假设 chapter.id 一定是 `page-N`，
+  // 也不把 EPUB 的 `chapter-N` 误当页码 —— 有 pageImages 的书才解析，其余回退章节序号。
+  const pageNumber = book.pageImages
+    ? Number(chapter.title.match(/\d+/)?.[0] || chapter.id.match(/\d+/)?.[0] || chapterIndex + 1)
+    : chapterIndex + 1;
   const pageImage = book.pageImages?.[pageNumber];
   const pageBlocks = book.pageBlocks?.[pageNumber] || [];
   // 版权扫描图不随开源仓库分发；换页 / 换书时重置缺失提示。
@@ -207,7 +208,7 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
             <div className="page-image-stage">
               {imageMissing
                 ? <div className="page-image-missing"><ImageIcon size={26} /><strong>本机没有这张扫描图</strong><p>页面扫描图属于第三方版权内容，不随开源仓库分发。把合法获得的图片放回 <code>public/books/&lt;book&gt;/</code>，或切回文字模式。</p></div>
-                : <img src={pageImage} alt={`第 ${pageNumber} 页扫描原图`} onError={() => setImageMissing(true)} />}
+                : <img src={pageImage} alt={`第 ${pageNumber} 页扫描原图`} loading="lazy" decoding="async" onError={() => setImageMissing(true)} />}
               {!imageMissing && pageBlocks.length > 0 && <OcrLayer blocks={pageBlocks} onWord={handleImageWord} onSelect={captureImageSelection} />}
             </div>
             <span className="page-image-hint">{zoom ? '点击恢复 · 点词可查义' : '点击放大 · 点图上单词查义'}</span>

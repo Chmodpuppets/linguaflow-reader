@@ -52,8 +52,12 @@ self.addEventListener('install', (event) => {
       const fonts = [...css.matchAll(/url\((?:['"]?)([^)'"\s]+)/g)].map((match) => new URL(match[1], new URL(url, self.location.origin)).pathname);
       for (const font of fonts) precache.add(font);
     }
+    // latin-ext 子集带 unicode-range，只在页面真出现变音字母时才会被请求。
+    // 它既在构建清单里、也在 CSS 里，统一在这里过滤，避免白占约 127KB 配额；
+    // 真用到时由 fetch handler 运行时按需缓存，多语言 EPUB 不受影响。
+    const toCache = [...precache].filter((url) => !url.includes('latin-ext'));
     // 逐个 add 且允许失败：单个资源 404 不该让整个 SW 安装失败。
-    await Promise.allSettled([...precache].map((url) => cache.add(url)));
+    await Promise.allSettled(toCache.map((url) => cache.add(url)));
   })());
   self.skipWaiting();
 });

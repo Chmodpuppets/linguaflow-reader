@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：58
-总大小：0.93 MB
+文件数：59
+总大小：0.94 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -36,6 +36,7 @@
 - `src/components/AudioBinding.tsx`
 - `src/components/Library.tsx`
 - `src/components/Notes.tsx`
+- `src/components/OrphanAudioCleanup.tsx`
 - `src/components/Reader.tsx`
 - `src/components/Review.tsx`
 - `src/components/Settings.tsx`

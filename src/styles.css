@@ -147,6 +147,10 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .book-cover small { left: 13px; bottom: 14px; font-size: 7px; max-width: 95px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .book-cover i { width: 45px; height: 45px; bottom: 40px; }
 .book-info { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; padding-top: 3px; }
+/* 删除书籍：只对自己导入的 EPUB 显示，做成低调的图标按钮，不与「开始阅读」抢视觉权重。 */
+.book-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.book-delete { width: 30px; height: 30px; padding: 0; font: inherit; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.09); border-radius: 8px; background: rgba(7,7,14,.45); color: var(--faint); cursor: pointer; opacity: .6; transition: .2s ease; }
+.book-delete:hover, .book-delete:focus-visible { color: #f87171; border-color: rgba(248,113,113,.4); opacity: 1; }
 .book-source { font-size: 7px; letter-spacing: .13em; color: var(--faint); margin-bottom: 10px; }
 .book-info h3 { font-family: 'Literata Variable',Georgia,serif; font-size: 17px; line-height: 1.25; font-weight: 550; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .book-info > p { color: var(--muted); font-size: 10px; margin-bottom: 18px; }
@@ -426,6 +430,11 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .quota-bar { height: 3px; border-radius: 3px; background: rgba(255,255,255,.08); margin: 10px 0 7px; overflow: hidden; }
 .quota-bar > span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg,#22d3ee,#7c6cff); }
 .storage-quota > small { display: block; color: var(--faint); font-size: 9px; }
+.orphan-cleanup { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 11px 14px; border: 1px solid rgba(248,113,113,.22); border-radius: 11px; background: rgba(248,113,113,.05); }
+.orphan-cleanup > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.orphan-cleanup strong { font-size: 10px; font-weight: 550; color: #fca5a5; }
+.orphan-cleanup span { font-size: 9px; line-height: 1.6; color: var(--faint); }
+.orphan-cleanup .button { flex: none; }
 
 .storage-features { display: flex; flex-direction: column; gap: 11px; padding: 19px 3px; }
 .storage-features span { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }

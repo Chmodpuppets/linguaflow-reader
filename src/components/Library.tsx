@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { ArrowRight, BookOpen, Clock3, FileUp, Import, Library as LibraryIcon, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpen, Clock3, FileUp, Import, Library as LibraryIcon, Search, Sparkles, Trash2 } from 'lucide-react';
 import type { Book } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 import { readingMinutes } from '../lib/utils';
 import type { ImportProgress } from '../lib/epub';
 
-export default function Library({ books, onOpen, onImport, importing, importProgress }: { books: Book[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; importing: boolean; importProgress?: ImportProgress | null }) {
+export default function Library({ books, onOpen, onImport, onDelete, importing, importProgress }: { books: Book[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null }) {
   const [query, setQuery] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -27,7 +27,7 @@ export default function Library({ books, onOpen, onImport, importing, importProg
     <section className="library-section"><div className="section-heading"><div><h2>我的书库 <span>{books.length}</span></h2><p>你的书、你的笔记、你的学习语境。</p></div><label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" /></label></div>
       {filtered.length ? <div className="book-grid">{filtered.map((book) => <article className="book-card glass-panel" key={book.id}>
         <button className="book-cover" style={{ '--accent': book.accent } as React.CSSProperties} onClick={() => onOpen(book)}><span>LINGUAFLOW EDITIONS</span><strong>{book.cover}</strong><small>{book.author}</small><i /></button>
-        <div className="book-info"><div className="book-source">{book.source === 'epub' ? 'EPUB' : 'ORIGINAL SAMPLE'}</div><h3>{book.title}</h3><p>{book.author}</p><div className="book-progress"><div><span>{book.progress ? `已读 ${book.progress}%` : '尚未开始'}</span><span>{book.chapters.length} 章</span></div><ProgressBar value={book.progress} /></div><Button variant="secondary" size="sm" onClick={() => onOpen(book)}>{book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={15} /></Button></div>
+        <div className="book-info"><div className="book-source">{book.source === 'epub' ? 'EPUB' : 'ORIGINAL SAMPLE'}</div><h3>{book.title}</h3><p>{book.author}</p><div className="book-progress"><div><span>{book.progress ? `已读 ${book.progress}%` : '尚未开始'}</span><span>{book.chapters.length} 章</span></div><ProgressBar value={book.progress} /></div><div className="book-actions"><Button variant="secondary" size="sm" onClick={() => onOpen(book)}>{book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={15} /></Button>{book.source === 'epub' && onDelete && <button className="book-delete" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`} title="删除这本书（含相关笔记与练习记录）"><Trash2 size={14} /></button>}</div></div>
       </article>)}</div> : <EmptyState icon={<LibraryIcon size={28} />} title="没有找到这本书" description="试试其他关键词，或导入一本新的 EPUB。" action={<Button onClick={() => setImportOpen(true)}>导入书籍</Button>} />}
     </section>
     <div className="library-footnote"><BookOpen size={15} /><span>所有示例文章均为原创演示内容。你导入的书籍只保存在本机，不会上传。</span><span>平均进度 {totalProgress}%</span></div>

@@ -8,7 +8,9 @@ import Notes from './components/Notes';
 import Settings from './components/Settings';
 import { initialData } from './data/initialData';
 import { loadBuiltinBooks } from './data/builtinBooks';
-import { loadData, saveData, saveVoiceAudio } from './lib/db';
+import { deleteAlignment, deleteBookAudio, loadData, saveData, saveVoiceAudio } from './lib/db';
+import { notifyBookAudioChanged } from './lib/bookAudio';
+import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, VocabEntry, VoiceRecord } from './types';
@@ -48,7 +50,16 @@ function hydrateBooks(books: Book[]): Book[] {
     const full = STATIC_CONTENT.get(book.id);
     // 扫描书的正文是异步 chunk：还没到位时先给个空壳，保证书库列表不会因缺 chapters 崩溃
     if (!full) return Array.isArray(book.chapters) ? book : { ...book, chapters: [] };
-    return { ...full, progress: book.progress, currentChapter: book.currentChapter, currentParagraph: book.currentParagraph, lastReadAt: book.lastReadAt, addedAt: book.addedAt };
+    // 以静态书打底（保证默认字段齐全），再用持久化数据覆盖（保留用户改过的元数据），
+    // 最后把 slimForStorage 剥掉的 4 个大字段补回来。老写法只用 6 个字段重建，
+    // 会把 accent / cover / description 等自定义值悄悄丢掉。
+    return {
+      ...full, ...book,
+      chapters: full.chapters,
+      pageImages: full.pageImages,
+      pageBlocks: full.pageBlocks,
+      audio: full.audio,
+    };
   });
 }
 
@@ -155,6 +166,30 @@ export default function App() {
   const addVocab = (entry: NewVocab) => setData((current) => ({ ...current, vocabulary: [{ ...entry, id: makeId('vocab'), createdAt: new Date().toISOString(), familiarity: 0, dueAt: new Date().toISOString(), reviewCount: 0 }, ...current.vocabulary] }));
   const addHighlight = (highlight: NewHighlight) => setData((current) => ({ ...current, highlights: [{ ...highlight, id: makeId('mark'), createdAt: new Date().toISOString() }, ...current.highlights] }));
   const deleteVocab = (id: string) => { if (window.confirm('确定删除这个词条吗？原文和复习记录也会从词汇本移除。')) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) })); };
+  const deleteBook = (id: string) => {
+    const book = data.books.find((item) => item.id === id);
+    // 内置样书来自 STATIC_CONTENT，删了下次 hydrate 又会回来，只允许删自己导入的 EPUB。
+    if (!book || book.source !== 'epub') return;
+    if (!window.confirm(`确定删除《${book.title}》吗？这本书的笔记、词条、复习记录和练习记录也会一并移除。`)) return;
+    setData((current) => {
+      const removedVocabIds = new Set(current.vocabulary.filter((entry) => entry.bookId === id).map((entry) => entry.id));
+      return {
+        ...current,
+        books: current.books.filter((item) => item.id !== id),
+        vocabulary: current.vocabulary.filter((entry) => entry.bookId !== id),
+        highlights: current.highlights.filter((item) => item.bookId !== id),
+        reviewLogs: current.reviewLogs.filter((log) => !removedVocabIds.has(log.vocabId)),
+        voiceRecords: current.voiceRecords.filter((record) => record.bookId !== id),
+      };
+    });
+    // 级联清掉 IndexedDB 里为这本书绑定的音频与句级对齐，避免留下孤儿 Blob。
+    void deleteBookAudio(id).catch(() => undefined);
+    void deleteAlignment(id).catch(() => undefined);
+    clearAlignment(id);
+    notifyBookAudioChanged(id);
+    if (activeBookId === id) { setActiveBookId(null); setPage('library'); }
+    notify(`已删除《${book.title}》`);
+  };
   const deleteHighlight = (id: string) => setData((current) => ({ ...current, highlights: current.highlights.filter((item) => item.id !== id) }));
   const saveVoiceRecord = async (record: VoiceRecord, audio: Blob) => {
     // 先确保录音 Blob 落盘，再计入统计：写失败时不产生「有记录无音频」的孤儿。
@@ -207,7 +242,7 @@ export default function App() {
 
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
-  else if (page === 'library') content = <Library books={data.books} onOpen={openBook} onImport={importBook} importing={importing} importProgress={importProgress} />;
+  else if (page === 'library') content = <Library books={data.books} onOpen={openBook} onImport={importBook} onDelete={deleteBook} importing={importing} importProgress={importProgress} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} onReview={addReview} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;

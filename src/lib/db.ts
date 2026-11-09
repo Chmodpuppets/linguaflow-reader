@@ -94,6 +94,15 @@ export const saveVoiceAudio = (id: string, blob: Blob) => writeBlob(VOICE_STORE,
 export const getVoiceAudio = (id: string) => readBlob(VOICE_STORE, id);
 export const deleteVoiceAudio = (id: string) => removeBlob(VOICE_STORE, id);
 
+/** 列出所有录音 Blob 的 id，用于找出「没有对应练习记录」的孤儿文件。 */
+export function listVoiceAudioIds(): Promise<string[]> {
+  return openDatabase().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction(VOICE_STORE, 'readonly').objectStore(VOICE_STORE).getAllKeys();
+    request.onsuccess = () => resolve((request.result as IDBValidKey[]).map(String));
+    request.onerror = () => reject(request.error);
+  }));
+}
+
 // —— 用户绑定的书本原音（独立于 AppData，不进 JSON 备份，不受 slimForStorage 影响）——
 export const saveBookAudio = (bookId: string, blob: Blob) => writeBlob(BOOK_AUDIO_STORE, bookId, blob);
 export const getBookAudio = (bookId: string) => readBlob(BOOK_AUDIO_STORE, bookId);
