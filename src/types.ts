@@ -87,7 +87,7 @@ export interface ReaderSettings {
 }
 
 export type VoiceMode = 'shadowing' | 'retell' | 'freetalk';
-export type DiffStatus = 'match' | 'low' | 'missing' | 'substitute' | 'extra' | 'pause';
+export type DiffStatus = 'match' | 'low' | 'missing' | 'substitute' | 'extra';
 
 export interface DiffToken {
   text: string;
@@ -114,7 +114,6 @@ export interface VoiceRecord {
   transcript: string;
   diffTokens: DiffToken[];
   metrics: VoiceMetrics;
-  aiPolishResult?: { original: string; corrected: string; idiomatic: string };
   createdAt: string;
 }
 

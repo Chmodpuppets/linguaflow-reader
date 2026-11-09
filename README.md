@@ -2,7 +2,8 @@
 
 一个把「读」和「说」接起来的本地优先阅读器。读完一句，就地跟读；说完一段，立刻看到差距。
 
-纯前端，无后端、无账号、无云端。书、词、笔记、录音全部留在本机 IndexedDB。
+纯前端，无后端、无账号。书 / 词 / 笔记 / 录音全部留在本机 IndexedDB，不上传。
+唯一需要联网的环节是**首次启用本地 Whisper 时下载模型**（默认 `hf-mirror.com`，可切到自托管 `/models/` 完全离线）；转写推理本身在浏览器本地完成。
 
 ## 功能模块
 
@@ -43,6 +44,10 @@ npm run build
 
 `predev` / `prebuild` 会自动执行 `scripts/copy-ort-assets.mjs`，把 onnxruntime-web 的
 `ort-wasm-simd-threaded.{mjs,wasm}`（约 14MB）复制到 `public/wasm/`。这个目录不进版本库。
+
+> 新 clone 的仓库**不含内置示例书的扫描图 / 音频 / 正文 JSON**（第三方版权内容，见下方专节）。
+> 直接 `npm run dev` 会看到 3 本原创样书，导入自己的 EPUB 即可正常使用；
+> 想启用内置扫描书，请把合法获得的素材按该节说明放到本机目录。
 
 ## 本地 Whisper
 

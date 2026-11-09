@@ -18,6 +18,21 @@ function cacheable(url) {
   if (path.endsWith('.mp3') || path.includes('/audio')) return false;
   return path === '/' || path.startsWith('/assets/') || path.startsWith('/wasm/') || path.includes('/books/');
 }
+// 预缓存（install 管理，永不裁剪）与运行时缓存分开：
+// 长期使用时 cache.put 会无限累积，单独设上限才不会撑爆配额。
+const RUNTIME_CACHE = `${CACHE}-runtime`;
+const MAX_RUNTIME_ENTRIES = 120;
+let putsSinceTrim = 0;
+
+async function trimRuntimeCache(cache) {
+  putsSinceTrim += 1;
+  if (putsSinceTrim < 20) return; // 每 20 次写入才列一次 keys，避免每个请求都扫全表
+  putsSinceTrim = 0;
+  const keys = await cache.keys();
+  if (keys.length <= MAX_RUNTIME_ENTRIES) return;
+  for (const key of keys.slice(0, keys.length - MAX_RUNTIME_ENTRIES)) await cache.delete(key);
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -59,8 +74,9 @@ self.addEventListener('fetch', (event) => {
     try {
       const response = await fetch(event.request);
       if (response.ok && response.status === 200) {
-        const cache = await caches.open(CACHE);
+        const cache = await caches.open(RUNTIME_CACHE);
         await cache.put(event.request, response.clone());
+        await trimRuntimeCache(cache);
       }
       return response;
     } catch {

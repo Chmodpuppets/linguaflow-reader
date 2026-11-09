@@ -23,12 +23,8 @@ async function loadOptionalBook(): Promise<Book | null> {
   }
 }
 
+/** 本机素材缺失 / 离线首启时直接返回样书，不再额外导出一个零引用的兜底函数。 */
 export async function loadBuiltinBooks(): Promise<Book[]> {
   const optional = await loadOptionalBook();
   return optional ? [...sampleBooks, optional] : sampleBooks;
-}
-
-/** 轻量兜底：本机素材缺失 / 离线首启时至少还有样书可读。 */
-export function fallbackBuiltinBooks(): Book[] {
-  return sampleBooks;
 }

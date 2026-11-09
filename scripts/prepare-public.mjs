@@ -109,7 +109,7 @@ for (const file of files) totalBytes += (await stat(join(dest, file))).size;
 const report = [
   '# 公开快照审计报告',
   '',
-  `生成时间：${new Date().toISOString()}`,
+  // 不写生成时间：报告会随快照一起分发，时间戳会让每次同步都产生无意义 diff。
   `快照目录：${dest}`,
   `文件数：${files.length}`,
   `总大小：${(totalBytes / 1048576).toFixed(2)} MB`,

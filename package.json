@@ -7,6 +7,7 @@
     "prepare:wasm": "node scripts/copy-ort-assets.mjs",
     "export:local-content": "node scripts/export-local-content.mjs",
     "prepare:public": "node scripts/prepare-public.mjs",
+    "sync:public": "node scripts/sync-public.mjs",
     "predev": "npm run prepare:wasm",
     "dev": "vite --host 127.0.0.1 --port 3012",
     "prebuild": "npm run prepare:wasm",

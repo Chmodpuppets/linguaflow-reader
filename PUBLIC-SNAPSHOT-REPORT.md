@@ -1,9 +1,8 @@
 # 公开快照审计报告
 
-生成时间：2026-11-08T20:01:49.856Z
 快照目录：/tmp/linguaflow-reader-public
-文件数：57
-总大小：0.92 MB
+文件数：58
+总大小：0.93 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -30,6 +29,7 @@
 - `scripts/copy-ort-assets.mjs`
 - `scripts/export-local-content.mjs`
 - `scripts/prepare-public.mjs`
+- `scripts/sync-public.mjs`
 - `src/App.tsx`
 - `src/components/AppShell.tsx`
 - `src/components/AudioBar.tsx`
