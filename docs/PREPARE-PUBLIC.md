@@ -108,12 +108,30 @@ git push -u origin main          # 普通 push，不是 force
 
 ---
 
-## 4. 上线后可顺手补的（非阻断）
+## 4. 上线后已完成 / 增量同步
 
-- README 顶部加一句「内置示例书需自行提供本机素材」，避免新用户困惑
-- 加 GitHub 仓库描述 / topics（`local-first` `pwa` `react` `language-learning` `whisper`）
-- 发一个 `v0.1.0` tag
-- 剩下的 P2 / P3 代码打磨见 [`audit-2026-11-07.md`](audit-2026-11-07.md) 第 10 节
+✅ **已完成（2026-11-09）**
+
+- 仓库描述 + 10 个 topics
+- annotated tag `v0.1.0`（指向首个发布 commit `114909f8`，不会随后续 commit 移动）
+- README 顶部补「新 clone 不含内置示例书素材」提示、「无云端」口径改成「仅首次下载模型需联网」
+- 备份恢复校验增强（去原生 `alert`、20MB 上限、字段/主题校验、成功提示）
+- SW 运行时缓存与预缓存分离 + 120 条上限裁剪
+- 死代码清理：`fallbackBuiltinBooks` / `aiPolishResult` / `DiffStatus 'pause'`
+
+🔧 **后续怎么同步代码到公开仓**（`github.com` git 协议在本机被代理挡，走 `api.github.com`）
+
+```bash
+npm run prepare:public                      # 重新生成并审计干净快照
+npm run sync:public -- --dry-run            # 只看增量 diff，不推送
+PUBLIC_COMMIT_MESSAGE="feat: ..." npm run sync:public
+```
+
+`sync:public` 用 **Git blob sha1** 对比本地快照与远端 tree，只为变化的文件建 blob，
+基于 `base_tree` 生成新 tree、以远端 head 为 parent 建 commit，最后更新 `refs/heads/main`。
+所以是**线性历史**、单次只发几个请求，不用全量重推 58 个文件。
+
+仍待办：P2 / P3 代码打磨见 [`audit-2026-11-07.md`](audit-2026-11-07.md) 第 10 节。
 
 ---
 
