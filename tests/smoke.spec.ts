@@ -20,5 +20,6 @@ test('导航可切到口语实验室与设置页（懒加载 chunk 正常）', a
 
   await page.locator('.main-nav .nav-item', { hasText: '阅读设置' }).click();
   await expect(page.locator('.settings-page')).toBeVisible();
-  await expect(page.getByText('本地工作区')).toBeVisible();
+  // 用精确的 heading 角色：getByText('本地工作区') 会同时命中状态文案「本地工作区已就绪」而触发 strict mode violation。
+  await expect(page.getByRole('heading', { name: '本地工作区', exact: true })).toBeVisible();
 });
