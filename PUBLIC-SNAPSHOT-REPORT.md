@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：59
-总大小：0.94 MB
+文件数：66
+总大小：0.95 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -10,6 +10,7 @@
 
 ## 文件清单
 
+- `.github/workflows/ci.yml`
 - `.gitignore`
 - `LICENSE`
 - `README.md`
@@ -20,6 +21,7 @@
 - `index.html`
 - `package-lock.json`
 - `package.json`
+- `playwright.config.ts`
 - `public/licenses/Inter-OFL.txt`
 - `public/licenses/Literata-OFL.txt`
 - `public/linguaflow-icon.png`
@@ -67,5 +69,10 @@
 - `src/vite-env.d.ts`
 - `src/voice.css`
 - `src/workers/whisper.worker.ts`
+- `tests/backup.spec.ts`
+- `tests/degrade.spec.ts`
+- `tests/offline.spec.ts`
+- `tests/smoke.spec.ts`
 - `tsconfig.json`
+- `tsconfig.tests.json`
 - `vite.config.ts`

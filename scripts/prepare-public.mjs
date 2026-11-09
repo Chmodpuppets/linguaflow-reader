@@ -21,10 +21,11 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const dest = process.env.PUBLIC_SNAPSHOT_DIR || '/tmp/linguaflow-reader-public';
 
 /** 只复制这些目录 / 文件，其它一律不带。 */
-const TREES = ['src', 'scripts', 'docs', 'public/licenses'];
+const TREES = ['src', 'scripts', 'docs', 'tests', '.github', 'public/licenses'];
 const FILES = [
   '.gitignore', 'LICENSE', 'README.md', 'THIRD-PARTY-NOTICES.md',
-  'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'vite.config.ts',
+  'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.tests.json',
+  'vite.config.ts', 'playwright.config.ts',
   'public/sw.js', 'public/manifest.webmanifest',
   'public/linguaflow-icon.png', 'public/linguaflow-logo.png',
 ];

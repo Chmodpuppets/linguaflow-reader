@@ -3,6 +3,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Playwright 产物
+playwright-report/
+test-results/
+
 # 系统与编辑器
 .DS_Store
 .idea/

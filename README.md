@@ -154,6 +154,21 @@ npm run dev
 - 模型源默认 `hf-mirror.com`（首次下载需联网）；完全离线自托管请用 `local` 源
 - 完整待办与优先级见 [`docs/audit-2026-11-07.md`](docs/audit-2026-11-07.md) 第 10 节
 
+## 测试与 CI
+
+```bash
+npx playwright install chromium   # 仅首次
+npm run typecheck                 # 源码 + E2E 用例的类型检查
+npm run test:e2e
+```
+
+`playwright.config.ts` 的 `webServer` 会先 `npm run build` 再跑 `vite preview` ——
+Service Worker 只在生产构建下注册，离线 / 预缓存用例必须在 preview 环境跑。
+GitHub Actions（`.github/workflows/ci.yml`）在 push / PR 时自动执行类型检查与 E2E，失败会上传报告。
+
+用例覆盖：首页与 7 项导航、**缺本机书籍 JSON 的降级**、**非法备份恢复的 toast 提示**、
+**SW 预缓存清单完整性**与 **latin-ext 按需缓存**（这几项此前只有静态验证）。
+
 ## License
 
 MIT — 仅覆盖原创源码。第三方素材与依赖见 `THIRD-PARTY-NOTICES.md`。
