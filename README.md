@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/linguaflow-logo.png" width="320" alt="LinguaFlow">
+</p>
+
 # LinguaFlow Reader
 
 一个把「读」和「说」接起来的本地优先阅读器。读完一句，就地跟读；说完一段，立刻看到差距。
