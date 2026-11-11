@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：75
-总大小：1.02 MB
+文件数：76
+总大小：1.03 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -17,6 +17,7 @@
 - `THIRD-PARTY-NOTICES.md`
 - `docs/PREPARE-PUBLIC.md`
 - `docs/audit-2026-11-07.md`
+- `docs/shared-dictionary.md`
 - `docs/voice-lab-v2-proposal.md`
 - `index.html`
 - `package-lock.json`
