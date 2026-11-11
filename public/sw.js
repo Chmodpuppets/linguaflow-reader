@@ -1,3 +1,5 @@
+// v12：导航 network-first（联网拿最新 index.html，断网回退预缓存外壳），
+//      修复部署后旧入口引用已下线旧 hash chunk 导致的动态导入 404。
 // v11：install 读取构建期 precache-manifest.json，补齐所有懒加载 chunk，离线首启可用。
 // v10：声明 esbuild 为显式 devDependency、修正过期注释，资源清单变化。
 // v9：书籍正文外置为本机可选 JSON，不再打进 JS bundle，资源清单变化。
@@ -72,6 +74,26 @@ self.addEventListener('fetch', (event) => {
   // 媒体元素的 Range 请求返回 206，cache.put 不支持且会抛错；直接透传网络，
   // 拖进度条、seek 都依赖 Range，绝不能进缓存路径。
   if (event.request.headers.has('range')) return;
+  // 导航（index.html）network-first：联网时永远拿最新入口，避免部署后旧 index
+  // 引用已下线的旧 hash chunk 而「Failed to fetch dynamically imported module」；
+  // 断网时回退预缓存外壳，离线首启仍可用。哈希命名的 /assets/ 仍走下面的 cache-first。
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request);
+        if (response.ok && response.status === 200) {
+          const cache = await caches.open(CACHE);
+          await cache.put('/', response.clone());
+        }
+        return response;
+      } catch {
+        const cached = await caches.match('/', { ignoreVary: true });
+        if (cached) return cached;
+        return new Response('当前离线，且应用外壳还没被缓存。请联网打开过一次后再试。', { status: 503, statusText: 'Offline', headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      }
+    })());
+    return;
+  }
   // 只缓存白名单资源，音频等大文件放行网络，不缓存。
   if (!cacheable(event.request.url)) return;
   event.respondWith((async () => {

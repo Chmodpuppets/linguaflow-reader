@@ -46,6 +46,13 @@
 - **linguaflow-reader**：✅ 已推送公开仓，且**已部署到线上 `reader.pathmora.cn`**（静态根 `/opt/linguaflow-reader-web`，部署前备份为 `linguaflow-reader-web.bak-*`；保留服务器侧 `books/`、`local-content/`、`wasm/`）。实测线上 Reader chunk 含 `SERVER DICTIONARY`/`dict/lookup`/`pathmora_dict_base`，precache 版本与本地构建一致。注意：推 GitHub 不会自动部署该静态站，需单独更新 `/opt/linguaflow-reader-web`。
 - **pathmora**：共享客户端 `services/sharedDictionary.ts` 已加入 `linguasphere` 仓并通过 typecheck；**尚未部署到 `/opt/pathmora`**（Pathmora 走 releases 发布流程，且当前无查词 UI 调用它，部署与否不影响现有功能）。需要时随 Pathmora 下次发布一并上线。
 
+### 部署规则（reader 静态站，避免「Failed to fetch dynamically imported module」）
+
+1. **只overlay、不删旧 assets**：哈希命名的 chunk 长期保留（`/assets/*` 已设 `immutable` 强缓存）。部署时覆盖 `index.html`/`sw.js`/precache 并新增新 hash chunk，**不要 `rm -rf assets/`**——仍持有旧 index 的客户端需要旧 chunk 才能完成懒加载，删了会 404。
+2. **入口 no-cache**：`/`、`/index.html`、`/sw.js`、`/precache-manifest.json`、`/manifest.webmanifest` 设 `Cache-Control: no-cache`（每次 revalidate），保证浏览器/SW 不会拿到引用旧 hash 的入口。
+3. **SW 导航 network-first**（sw.js v12）：联网时导航永远取最新 `index.html` 并刷新预缓存外壳；断网回退预缓存 `/`。哈希 `/assets/` 仍 cache-first。这样部署后在线用户下一次导航即拿到新入口，不再被旧入口_strand_。
+4. 部署后验证：`curl -sI` 入口为 `no-cache`、`/assets/*` 为 `immutable`；新旧 chunk 均 200；`sw.js` 含 network-first。
+
 ## 6. 数据许可
 
 en=ECDICT(MIT)；ja=JMdict/jamdict-cn(CC BY-SA 4.0)；ko=Open Yonsei(CC BY-SA 3.0)；es=WikDict/DBnary(CC BY-SA)。再分发须保留署名与相同许可，见 `linguaflow` 仓 `public/dict/LICENSES.md`。
