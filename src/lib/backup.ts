@@ -41,5 +41,13 @@ export function validateBackup(parsed: unknown): AppData {
     const metrics = record?.metrics as Record<string, unknown> | undefined;
     if (!record || !str(record.id) || !str(record.createdAt) || !Array.isArray(record.diffTokens) || !metrics || !['wpm', 'pauseRatio', 'accuracy', 'duration', 'wordCount', 'fillerCount'].every((key) => num(metrics[key]))) throw new Error(`第 ${index + 1} 条口语练习记录损坏（缺少 metrics / diffTokens）`);
   });
+  // 收藏的句子是后加字段：旧备份没有时跳过（恢复端回退 []），有则逐条校验。
+  if (raw.sentences !== undefined) {
+    if (!Array.isArray(raw.sentences)) throw new Error('收藏句子列表格式不正确');
+    (raw.sentences as unknown[]).forEach((item, index) => {
+      const sentence = item as Record<string, unknown>;
+      if (!sentence || !str(sentence.id) || !str(sentence.text) || !str(sentence.bookId) || !num(sentence.paragraphIndex)) throw new Error(`第 ${index + 1} 条收藏句子损坏`);
+    });
+  }
   return parsed as AppData;
 }

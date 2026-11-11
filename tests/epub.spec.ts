@@ -26,7 +26,7 @@ async function buildGatsbyEpub(): Promise<Buffer> {
   zip.file('OEBPS/contents.xhtml', `<?xml version="1.0"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Contents</title></head><body><div class="contents"><a href="ch1.xhtml">CONTENTS</a><a>START READING</a><a>CHAPTER 1</a><a>CHAPTER 2</a><a>CHAPTER 3</a><a>ABOUT THE AUTHOR</a></div></body></html>`);
   zip.file('OEBPS/ch1.xhtml', `<?xml version="1.0"?>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>In my younger and more vulnerable years my father gave me some advice.</p><p>Whenever you feel like criticizing any one, just remember that all the people in this world haven't had the advantages that you've had.</p></body></html>`);
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>In my younger and more vulnerable years my father gave me some advice.</p><p>Whenever you feel like criticizing any one, just remember that all the people in this world haven't had the advantages that you've had.</p><p>The city glittered at night. My father gave me some advice that I still remember.</p></body></html>`);
   zip.file('OEBPS/ch2.xhtml', `<?xml version="1.0"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1><p>About half way between West Egg and New York the motor road hastily joins the railroad.</p><p>This is a valley of ashes — a fantastic farm where ashes grow like wheat.</p></body></html>`);
   zip.file('OEBPS/ch3.xhtml', `<?xml version="1.0"?>
@@ -94,4 +94,38 @@ test('点词查义：服务器词典不可达时回退 Free Dictionary API', asy
   await expect(panel.locator('.eyebrow')).toHaveText('ONLINE DICTIONARY');
   await expect(panel.locator('.dictionary-meaning')).toContainText('Susceptible to physical or emotional attack');
   await expect(panel.locator('.synonyms')).toContainText('exposed');
+});
+
+test('查词面板：只抓含词的那一句（非整段）+ 释义首屏 + 收藏句子进笔记页', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.route('**/api/dict/lookup*', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ found: true, lang: 'en', word: 'advice', phonetic: "/əd'vaɪs", meaning: 'n. 建议，忠告', pos: 'n' }),
+  }));
+  await importFixture(page);
+
+  // 第三段有两句；点第二句里的 advice，面板应只展示第二句，而不是整段。
+  await page.locator('.chapter-body p[data-paragraph="2"] .word[data-word="advice"]').click();
+  const panel = page.locator('.lookup-panel');
+  await expect(panel).toBeVisible();
+  // 释义在首屏（01 区块），中文释义可见。
+  await expect(panel.locator('.lookup-definition .dictionary-meaning')).toContainText('建议，忠告');
+  // 原句只含目标句，不含同段另一句；目标词被高亮。
+  const sentence = panel.locator('.lookup-sentence');
+  await expect(sentence).toContainText('that I still remember');
+  await expect(sentence).not.toContainText('glittered');
+  await expect(sentence.locator('mark')).toHaveText('advice');
+
+  // 收藏句子 → 笔记页可见该句。
+  await panel.getByRole('button', { name: '收藏句子' }).click();
+  await expect(panel.getByRole('button', { name: '已收藏句子' })).toBeVisible();
+  await panel.getByRole('button', { name: '返回原文' }).click();
+  await page.getByRole('button', { name: '返回书库' }).click();
+  await page.getByRole('button', { name: /标记与笔记/ }).click();
+  const card = page.locator('.sentence-card', { hasText: 'that I still remember' });
+  await expect(card).toBeVisible();
+  await expect(card.locator('.sentence-word-row strong')).toHaveText('advice');
+  await expect(card.locator('.sentence-meaning')).toContainText('建议，忠告');
+  expect(pageErrors).toEqual([]);
 });

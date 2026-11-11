@@ -10,7 +10,7 @@ import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
-import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, VocabEntry, VoiceRecord } from './types';
+import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
 // 拆成独立 chunk 后，首页只下载书库 + 词汇 + 外壳，首屏从 682KB 降到百来 KB 量级。
@@ -25,6 +25,7 @@ const Settings = lazy(() => import('./components/Settings'));
 
 type NewVocab = Omit<VocabEntry, 'id' | 'createdAt' | 'familiarity' | 'dueAt' | 'reviewCount'>;
 type NewHighlight = Omit<Highlight, 'id' | 'createdAt'>;
+type NewSentence = Omit<SavedSentence, 'id' | 'createdAt'>;
 
 // 内置书（sample）的正文内容在代码里静态存在，持久化时剥离，加载时从这还原，
 // 避免每次翻页都把整本书（含 OCR 块）序列化进 IndexedDB 导致卡顿。
@@ -97,6 +98,7 @@ export default function App() {
             books: hydrateBooks(stored.books),
             vocabulary: stored.vocabulary.map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
             voiceRecords: stored.voiceRecords || [],
+            sentences: stored.sentences || [],
           };
           // 老数据里可能没有后来新增的内置书：按 id 补齐，不动用户的词汇/笔记/进度
           const missing = initialData.books.filter((book) => !migrated.books.some((existing) => existing.id === book.id));
@@ -178,6 +180,11 @@ export default function App() {
   };
   const addVocab = (entry: NewVocab) => setData((current) => ({ ...current, vocabulary: [{ ...entry, id: makeId('vocab'), createdAt: new Date().toISOString(), familiarity: 0, dueAt: new Date().toISOString(), reviewCount: 0 }, ...current.vocabulary] }));
   const addHighlight = (highlight: NewHighlight) => setData((current) => ({ ...current, highlights: [{ ...highlight, id: makeId('mark'), createdAt: new Date().toISOString() }, ...current.highlights] }));
+  const addSentence = (sentence: NewSentence) => setData((current) => ({ ...current, sentences: [{ ...sentence, id: makeId('sentence'), createdAt: new Date().toISOString() }, ...(current.sentences || [])] }));
+  const deleteSentence = async (id: string) => {
+    const ok = await askConfirm({ title: '删除收藏句子', message: '确定从句子收藏里移除这句话吗？', confirmLabel: '删除', danger: true });
+    if (ok) setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
+  };
   const deleteVocab = async (id: string) => {
     const ok = await askConfirm({ title: '删除词条', message: '确定删除这个词条吗？原文和复习记录也会从词汇本移除。', confirmLabel: '删除', danger: true });
     if (ok) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
@@ -197,6 +204,7 @@ export default function App() {
         highlights: current.highlights.filter((item) => item.bookId !== id),
         reviewLogs: current.reviewLogs.filter((log) => !removedVocabIds.has(log.vocabId)),
         voiceRecords: current.voiceRecords.filter((record) => record.bookId !== id),
+        sentences: (current.sentences || []).filter((item) => item.bookId !== id),
       };
     });
     // 级联清掉 IndexedDB 里为这本书绑定的音频与句级对齐，避免留下孤儿 Blob。
@@ -255,7 +263,7 @@ export default function App() {
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {
-    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [] });
+    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [] });
     setActiveBookId(null);
     setPage('library');
     notify('备份已恢复，欢迎回到你的阅读空间');
@@ -264,13 +272,13 @@ export default function App() {
   if (!ready) return <div className="loading-screen"><img src="/linguaflow-icon.png" alt="LinguaFlow" /><div className="loading-line"><span /></div><p>正在打开你的本地阅读空间…</p></div>;
 
   let content: React.ReactNode;
-  if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
+  if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
   else if (page === 'library') content = <Library books={data.books} onOpen={openBook} onImport={importBook} onDelete={deleteBook} importing={importing} importProgress={importProgress} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} onReview={addReview} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
   else if (page === 'voice-analytics') content = <VoiceAnalytics records={data.voiceRecords} vocabulary={data.vocabulary} onPractice={() => setPage('voice-lab')} />;
-  else if (page === 'notes') content = <Notes highlights={data.highlights} books={data.books} onOpenSource={openSource} onDelete={deleteHighlight} />;
+  else if (page === 'notes') content = <Notes highlights={data.highlights} sentences={data.sentences || []} books={data.books} onOpenSource={openSource} onDelete={deleteHighlight} onDeleteSentence={deleteSentence} />;
   else content = <Settings settings={data.settings} data={data} books={data.books} storageChannel={storageChannel} onSettings={updateSettings} onExport={() => {
     // 恢复上限是 20MB：导出超限时先提醒，避免「自己的备份恢复不回来」。
     const bytes = JSON.stringify(data).length;

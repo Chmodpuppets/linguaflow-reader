@@ -73,6 +73,24 @@ export interface Highlight {
   createdAt: string;
 }
 
+/** 收藏的句子：查词面板里「收藏句子」保存的整句 + 当时的释义，供笔记页回顾 / 朗读 / 回原文。 */
+export interface SavedSentence {
+  id: string;
+  /** 包含所查单词的那一句（不是整段）。 */
+  text: string;
+  /** 触发收藏的单词。 */
+  word: string;
+  /** 收藏时的词典主释义（服务器为中文，免费词典为英文）。 */
+  meaning: string;
+  phonetic: string;
+  bookId: string;
+  bookTitle: string;
+  chapterId: string;
+  chapterTitle: string;
+  paragraphIndex: number;
+  createdAt: string;
+}
+
 export interface ReviewLog {
   id: string;
   vocabId: string;
@@ -125,6 +143,8 @@ export interface AppData {
   highlights: Highlight[];
   reviewLogs: ReviewLog[];
   voiceRecords: VoiceRecord[];
+  /** 收藏的句子（旧备份可能没有该字段，读取时回退 []）。 */
+  sentences?: SavedSentence[];
   settings: ReaderSettings;
 }
 
