@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Highlighter, Image as ImageIcon, List, Mic2, Minus, NotebookPen, Plus, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
-import type { Book, Highlight, ReaderSettings, SelectionState, VocabEntry, VoiceRecord } from '../types';
+import type { Book, DictionaryEntry, Highlight, ReaderSettings, SelectionState, VocabEntry, VoiceRecord } from '../types';
 import { lookupWord, normalizeWord } from '../data/dictionary';
+import { fetchRemoteDictionary } from '../lib/remoteDictionary';
 import { useBookAudioSrc } from '../lib/bookAudio';
 import { Button, Modal, ProgressBar } from './UI';
 import AudioBar from './AudioBar';
@@ -74,6 +75,9 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [lookup, setLookup] = useState<{ word: string; context: string; paragraphIndex: number } | null>(null);
+  // 在线词典兜底结果（按词缓存于 remoteDictionary）；remote.word 用于防止旧词的释义串到新词上。
+  const [remote, setRemote] = useState<{ word: string; entry: DictionaryEntry | null; source: 'server' | 'free' | null } | null>(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
   const [voiceTarget, setVoiceTarget] = useState('');
@@ -95,8 +99,25 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   // 版权扫描图不随开源仓库分发；换页 / 换书时重置缺失提示。
   useEffect(() => { setImageMissing(false); }, [book.id, pageNumber]);
   const pageText = chapter?.paragraphs.join(' ') || '';
-  const dictionary = lookup ? lookupWord(lookup.word) : undefined;
+  const localDict = lookup ? lookupWord(lookup.word) : undefined;
+  // 本地词库优先（带中文讲解）；本地未收录时用在线词典兜底，让任意英文词都有真实释义。
+  const dictionary = localDict || (lookup && remote?.word === lookup.word ? remote.entry || undefined : undefined);
   const isSaved = lookup ? savedWords.includes(normalizeWord(lookup.word)) : false;
+
+  // 打开查词面板且本地未收录时，异步拉在线词典；切换词 / 关闭面板即作废上一次请求。
+  useEffect(() => {
+    if (!lookup) { setRemote(null); setRemoteLoading(false); return; }
+    const word = lookup.word;
+    if (lookupWord(word)) { setRemote(null); setRemoteLoading(false); return; }
+    let active = true;
+    setRemoteLoading(true);
+    void fetchRemoteDictionary(word).then((result) => {
+      if (!active) return;
+      setRemote({ word, entry: result?.entry ?? null, source: result?.source ?? null });
+      setRemoteLoading(false);
+    });
+    return () => { active = false; };
+  }, [lookup]);
   const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter?.id), [highlights, book.id, chapter?.id]);
 
   useEffect(() => {
@@ -173,7 +194,7 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   const saveVocab = (source: { word: string; context: string; paragraphIndex: number }) => {
     const word = normalizeWord(source.word);
     if (savedWords.includes(word)) { onNotify('这个词已经在你的词汇本里'); return; }
-    onAddVocab({ word, context: source.context, bookId: book.id, bookTitle: book.title, chapterId: chapter.id, chapterTitle: chapter.title, paragraphIndex: source.paragraphIndex, note: '', dictionary: lookupWord(word) });
+    onAddVocab({ word, context: source.context, bookId: book.id, bookTitle: book.title, chapterId: chapter.id, chapterTitle: chapter.title, paragraphIndex: source.paragraphIndex, note: '', dictionary: lookupWord(word) || (remote?.word === word ? remote.entry || undefined : undefined) });
     onNotify(`已收藏 ${word}，原句也一起保存了`);
   };
 
@@ -253,7 +274,7 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
     </div>
     {audioSrc && <div className="reader-audio"><AudioBar book={book} src={audioSrc} page={pageNumber} onNotify={onNotify} /></div>}
     {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button><button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button></div>}
-    {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}><section className="lookup-panel glass-panel" aria-label="查词面板"><div className="lookup-grabber" /><div className="lookup-head"><div><span className="eyebrow">LOCAL DICTIONARY</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))}><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || '本地词库未收录音标'} {dictionary && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)}><X size={20} /></button></div><blockquote>{lookup.context}</blockquote><div className="dictionary-section"><span className="dictionary-number">01</span><div><h3>在这里是什么意思</h3>{dictionary ? <><p className="dictionary-meaning">{dictionary.meaning}</p><p className="dictionary-cn">{dictionary.chinese}</p></> : <p className="dictionary-meaning muted">本地词典暂未收录这个词。你仍可将它和原句一起收藏，之后补充讲解。</p>}</div></div>{dictionary && <div className="dictionary-section"><span className="dictionary-number">02</span><div><h3>可以怎么用</h3><p>{dictionary.usage}</p><div className="example-box"><p>{dictionary.example}</p><span>{dictionary.exampleCn}</span></div><div className="synonyms">{dictionary.synonyms.map((word) => <span key={word}>{word}</span>)}</div></div></div>}<div className="lookup-actions"><Button variant="secondary" onClick={() => setLookup(null)}>返回原文</Button><Button disabled={isSaved} onClick={() => saveVocab(lookup)}>{isSaved ? <Check size={17} /> : <Plus size={17} />}{isSaved ? '已在词汇本' : '连原句一起收藏'}</Button></div></section></div>}
+    {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}><section className="lookup-panel glass-panel" aria-label="查词面板"><div className="lookup-grabber" /><div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : dictionary ? (remote?.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))}><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)}><X size={20} /></button></div><blockquote>{lookup.context}</blockquote><div className="dictionary-section"><span className="dictionary-number">01</span><div><h3>在这里是什么意思</h3>{dictionary ? <><p className="dictionary-meaning">{dictionary.meaning}</p>{dictionary.chinese && <p className="dictionary-cn">{dictionary.chinese}</p>}</> : remoteLoading ? <p className="dictionary-meaning muted">本地词库未收录，正在查询服务器词典…</p> : <p className="dictionary-meaning muted">本地与在线词典都暂未收录这个词（离线时仅用本地词库）。你仍可将它和原句一起收藏，之后补充讲解。</p>}</div></div>{dictionary && (dictionary.usage || dictionary.example || dictionary.synonyms.length > 0) && <div className="dictionary-section"><span className="dictionary-number">02</span><div><h3>可以怎么用</h3>{dictionary.usage && <p>{dictionary.usage}</p>}{dictionary.example && <div className="example-box"><p>{dictionary.example}</p>{dictionary.exampleCn && <span>{dictionary.exampleCn}</span>}</div>}{dictionary.synonyms.length > 0 && <div className="synonyms">{dictionary.synonyms.map((word) => <span key={word}>{word}</span>)}</div>}</div></div>}<div className="lookup-actions"><Button variant="secondary" onClick={() => setLookup(null)}>返回原文</Button><Button disabled={isSaved} onClick={() => saveVocab(lookup)}>{isSaved ? <Check size={17} /> : <Plus size={17} />}{isSaved ? '已在词汇本' : '连原句一起收藏'}</Button></div></section></div>}
     {noteOpen && selection && <Modal title="给这段原文留条笔记" eyebrow="THINK WITH THE TEXT" onClose={() => setNoteOpen(false)}><blockquote className="note-quote">{selection.text}</blockquote><textarea className="note-input" autoFocus value={note} onChange={(event) => setNote(event.target.value)} placeholder="这句话让你想到了什么？" rows={5} /><div className="modal-actions"><Button variant="ghost" onClick={() => setNoteOpen(false)}>取消</Button><Button onClick={() => saveHighlight(true)} disabled={!note.trim()}>保存笔记</Button></div></Modal>}
     {voiceTarget && <div className="reader-voice-backdrop"><section className="reader-voice-drawer glass-panel"><div className="drawer-heading"><div><span className="eyebrow">LISTEN & CATCH · VOICE LAB</span><h2>跟读对比</h2></div><button className="icon-button" onClick={() => setVoiceTarget('')} aria-label="关闭跟读面板"><X size={20} /></button></div><VoiceRecorder compact targetText={voiceTarget} mode="shadowing" audioUrl={audioSrc} bookId={book.id} onSave={onSaveVoice} /></section></div>}
   </div>;

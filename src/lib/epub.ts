@@ -46,6 +46,89 @@ function readFileWithProgress(file: File, onProgress?: (progress: ImportProgress
   });
 }
 
+/** 把相对 href 解析成 zip 内绝对路径（处理 ../ 与 .），并分离 #fragment。 */
+function resolveHref(dir: string, href: string): { path: string; fragment: string } {
+  const [rawPath, fragment = ''] = href.split('#');
+  const decoded = decodeURIComponent(rawPath);
+  const parts = `${dir}${decoded}`.split('/');
+  const stack: string[] = [];
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..') stack.pop();
+    else stack.push(part);
+  }
+  return { path: stack.join('/'), fragment };
+}
+
+function dirOf(path: string): string {
+  return path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
+}
+
+/** 从一个章节 XHTML 里提取标题与正文段落（去掉导航 / 脚本 / 样式 / 矢量噪声）。 */
+function extractChapter(html: Document, root?: Element): { heading?: string; paragraphs: string[] } {
+  html.querySelectorAll('script, style, nav, svg').forEach((element) => element.remove());
+  const scope: ParentNode = root || html;
+  const blocks = Array.from(scope.querySelectorAll('h1, h2, h3, p, blockquote'));
+  const heading = blocks.find((block) => /^H[1-3]$/.test(block.tagName))?.textContent?.trim();
+  const paragraphs = blocks
+    .filter((block) => !/^H[1-3]$/.test(block.tagName))
+    .map((block) => block.textContent?.replace(/\s+/g, ' ').trim() || '')
+    // 只滤掉页码 / 纯符号噪声，保留短对话（"Yes," he said.）。
+    // 旧写法 length > 24 会把小说里的短句整段丢掉，破坏原文完整性。
+    .filter((text) => text.length >= 2 && /[a-zA-Z一-鿿]/.test(text) && !/^\d+$/.test(text));
+  if (!paragraphs.length) {
+    const bodyText = (root || html.body)?.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (bodyText.length > 40) paragraphs.push(bodyText);
+  }
+  return { heading, paragraphs };
+}
+
+interface TocEntry { title: string; href: string }
+
+/** 读取 EPUB3 nav 或 EPUB2 NCX 目录，返回有序 {title, href}；没有则 null。 */
+async function readToc(zip: JSZip, opf: Document, manifest: Map<string, string>, base: string): Promise<{ entries: TocEntry[]; dir: string } | null> {
+  // EPUB3：manifest 里 properties 含 nav 的文档。
+  let navHref: string | undefined;
+  opf.querySelectorAll('manifest item').forEach((item) => {
+    if ((item.getAttribute('properties') || '').split(/\s+/).includes('nav')) navHref = item.getAttribute('href') || undefined;
+  });
+  if (navHref) {
+    const navPath = resolveHref(base, navHref).path;
+    const navFile = zip.file(navPath);
+    if (navFile) {
+      const nav = parseXml(await navFile.async('text'), 'text/html');
+      const navEls = Array.from(nav.querySelectorAll('nav'));
+      const tocNav = navEls.find((el) => (el.getAttribute('epub:type') || '').split(/\s+/).includes('toc')) || navEls[0];
+      if (tocNav) {
+        const entries = Array.from(tocNav.querySelectorAll('a[href]'))
+          .map((a) => ({ title: a.textContent?.replace(/\s+/g, ' ').trim() || '', href: a.getAttribute('href') || '' }))
+          .filter((entry) => entry.href);
+        if (entries.length) return { entries, dir: dirOf(navPath) };
+      }
+    }
+  }
+  // EPUB2：spine toc 属性指向 NCX。
+  const tocId = opf.querySelector('spine')?.getAttribute('toc');
+  const ncxHref = tocId ? manifest.get(tocId) : undefined;
+  if (ncxHref) {
+    const ncxPath = resolveHref(base, ncxHref).path;
+    const ncxFile = zip.file(ncxPath);
+    if (ncxFile) {
+      const ncx = parseXml(await ncxFile.async('text'));
+      const entries = Array.from(ncx.querySelectorAll('navMap navPoint'))
+        .map((point) => ({
+          title: point.querySelector('navLabel text')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+          href: point.querySelector('content')?.getAttribute('src') || '',
+        }))
+        .filter((entry) => entry.href);
+      if (entries.length) return { entries, dir: dirOf(ncxPath) };
+    }
+  }
+  return null;
+}
+
+const FRONT_MATTER = /^(cover|contents|table of contents|title page|copyright|also by|dedication|目录|封面|版权|扉页|献词)$/i;
+
 export async function importEpub(file: File, onProgress?: (progress: ImportProgress) => void): Promise<Book> {
   const buffer = await readFileWithProgress(file, onProgress);
   onProgress?.({ phase: 'parsing', progress: 100, label: '正在提取章节与正文…' });
@@ -58,7 +141,7 @@ export async function importEpub(file: File, onProgress?: (progress: ImportProgr
   const opfFile = zip.file(opfPath);
   if (!opfFile) throw new Error('EPUB 内容目录缺失。');
   const opf = parseXml(await opfFile.async('text'));
-  const base = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+  const base = dirOf(opfPath);
   const title = opf.querySelector('metadata > title, metadata > dc\\:title')?.textContent?.trim() || file.name.replace(/\.epub$/i, '');
   const author = opf.querySelector('metadata > creator, metadata > dc\\:creator')?.textContent?.trim() || 'Unknown author';
   const manifest = new Map<string, string>();
@@ -67,30 +150,54 @@ export async function importEpub(file: File, onProgress?: (progress: ImportProgr
     const href = item.getAttribute('href');
     if (id && href) manifest.set(id, href);
   });
-  const chapters: Chapter[] = [];
-  const spineItems = Array.from(opf.querySelectorAll('spine itemref'));
-  for (let index = 0; index < spineItems.length; index += 1) {
-    const idref = spineItems[index].getAttribute('idref') || '';
-    const href = manifest.get(idref);
-    if (!href) continue;
-    const chapterFile = zip.file(`${base}${decodeURIComponent(href)}`);
-    if (!chapterFile) continue;
+
+  const htmlCache = new Map<string, Document>();
+  const loadHtml = async (path: string): Promise<Document | null> => {
+    if (htmlCache.has(path)) return htmlCache.get(path) || null;
+    const chapterFile = zip.file(path);
+    if (!chapterFile) return null;
     const html = parseXml(await chapterFile.async('text'), 'text/html');
-    html.querySelectorAll('script, style, nav, svg').forEach((element) => element.remove());
-    const blocks = Array.from(html.querySelectorAll('h1, h2, h3, p, blockquote'));
-    const heading = blocks.find((block) => /^H[1-3]$/.test(block.tagName))?.textContent?.trim();
-    const paragraphs = blocks
-      .filter((block) => !/^H[1-3]$/.test(block.tagName))
-      .map((block) => block.textContent?.replace(/\s+/g, ' ').trim() || '')
-      // 只滤掉页码 / 纯符号噪声，保留短对话（"Yes," he said.）。
-      // 旧写法 length > 24 会把小说里的短句整段丢掉，破坏原文完整性。
-      .filter((text) => text.length >= 2 && /[a-zA-Z\u4e00-\u9fff]/.test(text) && !/^\d+$/.test(text));
-    if (!paragraphs.length) {
-      const bodyText = html.body?.textContent?.replace(/\s+/g, ' ').trim() || '';
-      if (bodyText.length > 40) paragraphs.push(bodyText);
+    htmlCache.set(path, html);
+    return html;
+  };
+
+  const chapters: Chapter[] = [];
+  // 优先按书自带的目录（nav / NCX）建章节：标题与顺序以目录为准，
+  // 避免把 spine 里的扉页 / 目录页 / 版权页当成「Chapter N」导致章节错位。
+  const toc = await readToc(zip, opf, manifest, base);
+  if (toc) {
+    const seen = new Set<string>();
+    for (const entry of toc.entries) {
+      if (FRONT_MATTER.test(entry.title)) continue;
+      const { path, fragment } = resolveHref(toc.dir, entry.href);
+      const key = `${path}#${fragment}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const html = await loadHtml(path);
+      if (!html) continue;
+      const anchor = fragment ? html.getElementById(fragment) : null;
+      const root = anchor && /^(SECTION|DIV|ARTICLE|BODY|MAIN)$/.test(anchor.tagName) ? anchor : undefined;
+      const { heading, paragraphs } = extractChapter(html, root);
+      if (!paragraphs.length) continue;
+      chapters.push({ id: `chapter-${chapters.length}`, title: entry.title || heading || `Chapter ${chapters.length + 1}`, paragraphs });
     }
-    if (paragraphs.length) chapters.push({ id: `chapter-${index}`, title: heading || `Chapter ${chapters.length + 1}`, paragraphs });
   }
+
+  // 无目录（或目录解析不出正文）时回退到 spine 顺序。
+  if (!chapters.length) {
+    const spineItems = Array.from(opf.querySelectorAll('spine itemref'));
+    for (let index = 0; index < spineItems.length; index += 1) {
+      const idref = spineItems[index].getAttribute('idref') || '';
+      const href = manifest.get(idref);
+      if (!href) continue;
+      const { path } = resolveHref(base, href);
+      const html = await loadHtml(path);
+      if (!html) continue;
+      const { heading, paragraphs } = extractChapter(html);
+      if (paragraphs.length) chapters.push({ id: `chapter-${index}`, title: heading || `Chapter ${chapters.length + 1}`, paragraphs });
+    }
+  }
+
   if (!chapters.length) throw new Error('没有提取到可阅读的正文。该 EPUB 可能是扫描图片或受 DRM 保护。');
   return {
     id: uniqueId(title),

@@ -1,0 +1,97 @@
+import { test, expect } from '@playwright/test';
+import JSZip from 'jszip';
+
+// 构造一本「Gatsby 式」EPUB：spine 里混入扉页 / 目录页（contents），
+// 真正的章节顺序与标题在 EPUB3 nav 目录里。旧解析按 spine 顺序会把 contents 当成章节，
+// 导致「Chapter 2」显示成目录页、章节整体错位。这里回归验证 TOC 驱动的章节映射。
+async function buildGatsbyEpub(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('META-INF/container.xml', `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`);
+  zip.file('OEBPS/content.opf', `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>The Great Gatsby</dc:title><dc:creator>F. Scott Fitzgerald</dc:creator><dc:identifier id="uid">urn:uuid:test</dc:identifier><dc:language>en</dc:language></metadata>
+<manifest>
+<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+<item id="contents" href="contents.xhtml" media-type="application/xhtml+xml"/>
+<item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+<item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>
+<item id="ch3" href="ch3.xhtml" media-type="application/xhtml+xml"/>
+</manifest>
+<spine><itemref idref="contents"/><itemref idref="ch1"/><itemref idref="ch2"/><itemref idref="ch3"/></spine>
+</package>`);
+  zip.file('OEBPS/nav.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><h1>Contents</h1><ol><li><a href="ch1.xhtml">Chapter One</a></li><li><a href="ch2.xhtml">Chapter Two</a></li><li><a href="ch3.xhtml">Chapter Three</a></li></ol></nav></body></html>`);
+  // 目录 / 扉页：只有链接没有 p/h，旧解析会把它整页拼成一段正文当成章节。
+  zip.file('OEBPS/contents.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Contents</title></head><body><div class="contents"><a href="ch1.xhtml">CONTENTS</a><a>START READING</a><a>CHAPTER 1</a><a>CHAPTER 2</a><a>CHAPTER 3</a><a>ABOUT THE AUTHOR</a></div></body></html>`);
+  zip.file('OEBPS/ch1.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>In my younger and more vulnerable years my father gave me some advice.</p><p>Whenever you feel like criticizing any one, just remember that all the people in this world haven't had the advantages that you've had.</p></body></html>`);
+  zip.file('OEBPS/ch2.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Two</title></head><body><h1>Chapter Two</h1><p>About half way between West Egg and New York the motor road hastily joins the railroad.</p><p>This is a valley of ashes — a fantastic farm where ashes grow like wheat.</p></body></html>`);
+  zip.file('OEBPS/ch3.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter Three</title></head><body><h1>Chapter Three</h1><p>There was music from my neighbor's house through the summer nights.</p><p>In his blue gardens men and girls came and went like moths.</p></body></html>`);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+async function importFixture(page: import('@playwright/test').Page) {
+  const buffer = await buildGatsbyEpub();
+  await page.goto('/');
+  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'gatsby.epub', mimeType: 'application/epub+zip', buffer });
+  // 导入成功后 App 直接打开该书（setActiveBookId），落在阅读器而非书库。
+  await expect(page.locator('.reader-page')).toBeVisible();
+  await expect(page.locator('.reader-book-title strong')).toHaveText('The Great Gatsby');
+}
+
+test('EPUB 章节以目录为准：扉页/目录页不占章节，Chapter Two 显示真实正文', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await importFixture(page);
+
+
+  // 目录只有 3 个真实章节，不含 Contents / 目录页。
+  const tocTitles = page.locator('.toc-list button strong');
+  await expect(tocTitles).toHaveCount(3);
+  await expect(tocTitles).toHaveText(['Chapter One', 'Chapter Two', 'Chapter Three']);
+
+  // 切到第二章，正文是真实章节内容，而不是拼接的目录页。
+  await page.locator('.toc-list button', { hasText: 'Chapter Two' }).click();
+  await expect(page.locator('.chapter-body')).toContainText('valley of ashes');
+  await expect(page.locator('.chapter-body')).not.toContainText('CONTENTSSTART');
+  await expect(page.locator('.reader-book-title span')).toHaveText('Chapter Two');
+  expect(pageErrors).toEqual([]);
+});
+
+test('点词查义：本地未收录时优先服务器英汉词典，显示中文释义', async ({ page }) => {
+  // 拦截 LinguaFlow 服务器词典，返回稳定中文释义，避免依赖外网。
+  await page.route('**/api/dict/lookup*', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ found: true, lang: 'en', word: 'vulnerable', phonetic: "'vʌlnərəbl", meaning: 'a. 易受伤害的，脆弱的，易受影响的', pos: 'a' }),
+  }));
+  await importFixture(page);
+
+  // vulnerable 不在本地词库 → 走服务器英汉词典。
+  await page.locator('.chapter-body .word[data-word="vulnerable"]').click();
+  const panel = page.locator('.lookup-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel.locator('.eyebrow')).toHaveText('SERVER DICTIONARY · 英汉');
+  await expect(panel.locator('.dictionary-meaning')).toContainText('易受伤害的');
+  await expect(panel.locator('.phonetic')).toContainText('vʌlnərəbl');
+});
+
+test('点词查义：服务器词典不可达时回退 Free Dictionary API', async ({ page }) => {
+  await page.route('**/api/dict/lookup*', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"found":false}' }));
+  await page.route('**/api.dictionaryapi.dev/**', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify([{ word: 'vulnerable', phonetic: '/ˈvʌlnərəbəl/', meanings: [{ partOfSpeech: 'adjective', definitions: [{ definition: 'Susceptible to physical or emotional attack or harm.', example: 'a vulnerable child' }], synonyms: ['exposed', 'defenseless'] }] }]),
+  }));
+  await importFixture(page);
+
+  await page.locator('.chapter-body .word[data-word="vulnerable"]').click();
+  const panel = page.locator('.lookup-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel.locator('.eyebrow')).toHaveText('ONLINE DICTIONARY');
+  await expect(panel.locator('.dictionary-meaning')).toContainText('Susceptible to physical or emotional attack');
+  await expect(panel.locator('.synonyms')).toContainText('exposed');
+});
