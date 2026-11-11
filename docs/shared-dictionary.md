@@ -43,7 +43,7 @@
 ## 5. 部署状态
 
 - **linguaflow API（CORS 开放）**：✅ 已部署生效。改动 `645b124a` 已应用到线上 `/opt/linguaflow-server/src/index.ts`（原文件备份为 `index.ts.bak-*`）并重启 `linguaflow-sync.service`；实测跨域 `GET`/`OPTIONS` 均返回 `Access-Control-Allow-Origin: *`。注意 `scripts/deploy-online.sh` 只传前端静态文件、不会重启 API，API 改动需单独更新 `/opt/linguaflow-server` 并重启该 service。
-- **linguaflow-reader**：✅ 已推送公开仓（共享客户端 + 本文档）。
+- **linguaflow-reader**：✅ 已推送公开仓，且**已部署到线上 `reader.pathmora.cn`**（静态根 `/opt/linguaflow-reader-web`，部署前备份为 `linguaflow-reader-web.bak-*`；保留服务器侧 `books/`、`local-content/`、`wasm/`）。实测线上 Reader chunk 含 `SERVER DICTIONARY`/`dict/lookup`/`pathmora_dict_base`，precache 版本与本地构建一致。注意：推 GitHub 不会自动部署该静态站，需单独更新 `/opt/linguaflow-reader-web`。
 - **pathmora**：共享客户端 `services/sharedDictionary.ts` 已加入 `linguasphere` 仓并通过 typecheck；**尚未部署到 `/opt/pathmora`**（Pathmora 走 releases 发布流程，且当前无查词 UI 调用它，部署与否不影响现有功能）。需要时随 Pathmora 下次发布一并上线。
 
 ## 6. 数据许可
