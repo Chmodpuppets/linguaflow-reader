@@ -171,3 +171,36 @@ test('有声书边听边看：无音频的书可就地绑定，播放条出现�
   await expect(bar).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
+
+// 很多转制 EPUB（AmazonClassics 等）用 <div class="para"> 或 <br> 分段而非 <p>。
+// 旧解析只查 p，会漏掉全部段落、把整章拼成一坨（边界连空格都丢）。回归验证自然段保留。
+async function buildDivEpub(): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('META-INF/container.xml', `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`);
+  zip.file('OEBPS/content.opf', `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Div Paragraphs</dc:title><dc:creator>Test</dc:creator><dc:identifier id="uid">urn:uuid:div</dc:identifier><dc:language>en</dc:language></metadata>
+<manifest><item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/></manifest>
+<spine><itemref idref="ch1"/></spine>
+</package>`);
+  zip.file('OEBPS/ch1.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><div class="para">The first paragraph stands alone.</div><div class="para">The second paragraph follows it.</div><div class="para">Third part A.<br/>Third part B.</div></body></html>`);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+test('div / br 分段的 EPUB 保留自然段，不拼成一坨', async ({ page }) => {
+  const buffer = await buildDivEpub();
+  await page.goto('/');
+  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'div.epub', mimeType: 'application/epub+zip', buffer });
+  await expect(page.locator('.reader-page')).toBeVisible();
+  const paragraphs = page.locator('.chapter-body p');
+  await expect(paragraphs).toHaveCount(4);
+  await expect(paragraphs.nth(0)).toContainText('The first paragraph stands alone.');
+  await expect(paragraphs.nth(1)).toContainText('The second paragraph follows it.');
+  await expect(paragraphs.nth(2)).toContainText('Third part A.');
+  await expect(paragraphs.nth(3)).toContainText('Third part B.');
+  // 段落边界不粘连：第一段不含第二段文字。
+  await expect(paragraphs.nth(0)).not.toContainText('second paragraph');
+});

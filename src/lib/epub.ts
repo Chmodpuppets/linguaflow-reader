@@ -64,18 +64,41 @@ function dirOf(path: string): string {
   return path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : '';
 }
 
+// 块级标签集合：用于识别「容器」与「叶子段落」。很多 EPUB（尤其 AmazonClassics 等
+// 转制书）把每个自然段放在 <div class="para"> 而非 <p>；只查 p 会漏掉全部段落，
+// 退化成整章拼接成一坨（段落边界连空格都丢，如 "stove.It"）。这里把 div/li/section 等
+// 一并纳入，并只取「叶子块」（内部不再嵌套块级标签），容器交给它的子块去贡献段落。
+const BLOCK_SELECTOR = 'p, div, blockquote, li, section, article, h1, h2, h3, h4, h5, h6';
+
+/** 把一段 innerHTML 按 <br> 切成若干纯文本段落（处理用 <br> 分段的书）。 */
+function segmentsOf(html: Document, block: Element): string[] {
+  const inner = block.innerHTML || '';
+  const parts = /<br\s*\/?>/i.test(inner) ? inner.split(/<br\s*\/?>/i) : [inner];
+  const out: string[] = [];
+  for (const part of parts) {
+    const span = html.createElement('span');
+    span.innerHTML = part;
+    const text = span.textContent?.replace(/\s+/g, ' ').trim() || '';
+    if (text) out.push(text);
+  }
+  return out;
+}
+
 /** 从一个章节 XHTML 里提取标题与正文段落（去掉导航 / 脚本 / 样式 / 矢量噪声）。 */
 function extractChapter(html: Document, root?: Element): { heading?: string; paragraphs: string[] } {
   html.querySelectorAll('script, style, nav, svg').forEach((element) => element.remove());
   const scope: ParentNode = root || html;
-  const blocks = Array.from(scope.querySelectorAll('h1, h2, h3, p, blockquote'));
+  const blocks = Array.from(scope.querySelectorAll(BLOCK_SELECTOR));
   const heading = blocks.find((block) => /^H[1-3]$/.test(block.tagName))?.textContent?.trim();
-  const paragraphs = blocks
-    .filter((block) => !/^H[1-3]$/.test(block.tagName))
-    .map((block) => block.textContent?.replace(/\s+/g, ' ').trim() || '')
-    // 只滤掉页码 / 纯符号噪声，保留短对话（"Yes," he said.）。
-    // 旧写法 length > 24 会把小说里的短句整段丢掉，破坏原文完整性。
-    .filter((text) => text.length >= 2 && /[a-zA-Z一-鿿]/.test(text) && !/^\d+$/.test(text));
+  const paragraphs: string[] = [];
+  for (const block of blocks) {
+    if (/^H[1-6]$/.test(block.tagName)) continue; // 标题不算正文段落
+    if (block.querySelector(BLOCK_SELECTOR)) continue; // 容器块：交给子块，避免整章重复拼接
+    for (const text of segmentsOf(html, block)) {
+      // 只滤掉页码 / 纯符号噪声 / 裸章节标记（"CHAPTER 1" 已由标题展示），保留短对话。
+      if (text.length >= 2 && /[a-zA-Z一-鿿]/.test(text) && !/^\d+$/.test(text) && !/^(chapter|part)\s+[0-9ivxlc]+$/i.test(text)) paragraphs.push(text);
+    }
+  }
   if (!paragraphs.length) {
     const bodyText = (root || html.body)?.textContent?.replace(/\s+/g, ' ').trim() || '';
     if (bodyText.length > 40) paragraphs.push(bodyText);
@@ -127,7 +150,9 @@ async function readToc(zip: JSZip, opf: Document, manifest: Map<string, string>,
   return null;
 }
 
-const FRONT_MATTER = /^(cover|contents|table of contents|title page|copyright|also by|dedication|目录|封面|版权|扉页|献词)$/i;
+// 前置 / 后置页不占章节。AmazonClassics 等书的 NCX 用 "COPYRIGHT PAGE" / "START READING" /
+// "ABOUT THE AUTHOR" 这类标签，旧正则只匹配裸 "copyright" 会把版权页当成 Chapter 1。
+const FRONT_MATTER = /^(cover|contents|table of contents|title page|copyright( page)?|also by.*|dedication|start reading|about the (author|publisher)|acknowledgments?|目录|封面|版权(页)?|扉页|献词)$/i;
 
 export async function importEpub(file: File, onProgress?: (progress: ImportProgress) => void): Promise<Book> {
   const buffer = await readFileWithProgress(file, onProgress);
