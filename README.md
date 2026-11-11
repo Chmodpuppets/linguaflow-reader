@@ -162,16 +162,23 @@ npm run dev
 
 ```bash
 npx playwright install chromium   # 仅首次
-npm run typecheck                 # 源码 + E2E 用例的类型检查
-npm run test:e2e
+npm run typecheck                 # 源码 + 测试用例的类型检查
+npm run test:unit                 # 纯函数单元测试（node:test，零额外依赖）
+npm run test:e2e                  # 桌面 + 移动视口
 ```
 
 `playwright.config.ts` 的 `webServer` 会先 `npm run build` 再跑 `vite preview` ——
 Service Worker 只在生产构建下注册，离线 / 预缓存用例必须在 preview 环境跑。
-GitHub Actions（`.github/workflows/ci.yml`）在 push / PR 时自动执行类型检查与 E2E，失败会上传报告。
+GitHub Actions（`.github/workflows/ci.yml`）在 push / PR 时自动执行类型检查、单元测试与 E2E，失败会上传报告。
 
-用例覆盖：首页与 7 项导航、**缺本机书籍 JSON 的降级**、**非法备份恢复的 toast 提示**、
-**SW 预缓存清单完整性**与 **latin-ext 按需缓存**（这几项此前只有静态验证）。
+**单元测试**（`tests/unit/`，esbuild 编译 + `node:test` 执行）：词级 diff / 语速与口头禅指标 /
+关键词提取、句级对齐的单调性与去重、备份条目级校验、按书隔离的音频时间轴查找。
+
+**E2E 覆盖**：首页与 **7 项导航逐一点击渲染**（含懒加载的 Reader / 统计页）、
+**缺本机书籍 JSON 的降级**、**非法备份与畸形条目的拒绝**（空 chapters 的书、缺 metrics 的练习记录）、
+**SW 预缓存清单完整性**、**latin-ext 真实触发后的按需缓存**、**真实断网后离线首启与导航**，
+以及**移动视口**（Pixel 7：底部导航 / 抽屉 / 阅读器无横向溢出）。
+E2E 用独立端口 4173 的生产 preview，不会误复用开发者的 dev server。
 
 ## License
 

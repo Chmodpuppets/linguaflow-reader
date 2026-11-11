@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { VoiceRecord } from '../types';
-import { deleteVoiceAudio, listVoiceAudioIds } from '../lib/db';
+import { deleteVoiceAudio, findOrphanVoiceAudioIds } from '../lib/db';
 import { Button } from './UI';
 
 /**
@@ -16,11 +16,8 @@ export default function OrphanAudioCleanup({ records, onNotify }: { records: Voi
   const [busy, setBusy] = useState(false);
 
   const scan = useCallback(async () => {
-    try {
-      const ids = await listVoiceAudioIds();
-      const known = new Set(records.map((record) => record.id));
-      setOrphans(ids.filter((id) => !known.has(id)));
-    } catch { /* IndexedDB 不可用时不显示清理入口 */ }
+    try { setOrphans(await findOrphanVoiceAudioIds(records)); }
+    catch { /* IndexedDB 不可用时不显示清理入口 */ }
     finally { setChecked(true); }
   }, [records]);
 

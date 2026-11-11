@@ -112,10 +112,14 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          epub: ['jszip'],
-          icons: ['lucide-react'],
+        // 用函数形式精确归组：对象形式会把 react-dom 的依赖 scheduler 漏给 icons，
+        // 造成 react chunk 反向依赖 icons。这里把整个 react 生态（含 scheduler）收进 react。
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('lucide-react')) return 'icons';
+          if (id.includes('jszip')) return 'epub';
+          if (id.includes('react-dom') || id.includes('scheduler') || id.includes('/react/')) return 'react';
+          return undefined;
         },
       },
     },

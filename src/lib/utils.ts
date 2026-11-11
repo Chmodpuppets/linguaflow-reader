@@ -17,5 +17,6 @@ export function downloadJson(filename: string, value: unknown): void {
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
-  URL.revokeObjectURL(url);
+  // 立即 revoke 会让部分浏览器（尤其 Safari）来不及启动下载；延迟回收。
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -66,6 +66,8 @@ export interface Highlight {
   chapterId: string;
   paragraphIndex: number;
   text: string;
+  /** 划选处在段落内的字符偏移。同段出现重复文本时靠它定位实际划选处；旧数据无此字段时回退 indexOf。 */
+  offset?: number;
   note: string;
   color: 'violet' | 'cyan' | 'amber';
   createdAt: string;
@@ -132,6 +134,8 @@ export interface SelectionState {
   bookId: string;
   chapterId: string;
   paragraphIndex: number;
+  /** 划选起点在段落内的字符偏移，用于重复文本的精确定位。 */
+  offset?: number;
   x: number;
   y: number;
 }

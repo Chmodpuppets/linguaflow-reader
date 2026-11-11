@@ -19,6 +19,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
+      - run: npm run test:unit
       # webServer 会自动跑 npm run build && npm run preview（SW 只在 PROD 注册）
       - run: npm run test:e2e
       - uses: actions/upload-artifact@v4

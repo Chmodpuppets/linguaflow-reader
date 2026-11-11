@@ -27,7 +27,6 @@ const DEFAULT_MODEL = 'Xenova/whisper-tiny.en';
 let cachedModel = '';
 let cachedSource: WhisperSource | '' = '';
 let cachedPipeline: Promise<AutomaticSpeechRecognitionPipeline> | null = null;
-let reportingId = 0;
 
 function post(reply: Reply) {
   self.postMessage(reply);
@@ -54,7 +53,9 @@ function configureRuntime(source: WhisperSource) {
   }
 }
 
-async function getPipeline(model: string, source: WhisperSource): Promise<AutomaticSpeechRecognitionPipeline> {
+// requestId 绑定到「发起这次加载」的请求：下载进度只回给它的发起者。
+// 此前用全局 reportingId，warmup 与转写并发时进度会报给后一个请求（错误归属）。
+async function getPipeline(model: string, source: WhisperSource, requestId: number): Promise<AutomaticSpeechRecognitionPipeline> {
   if (cachedPipeline && cachedModel === model && cachedSource === source) return cachedPipeline;
   cachedModel = model;
   cachedSource = source;
@@ -64,7 +65,7 @@ async function getPipeline(model: string, source: WhisperSource): Promise<Automa
     device: 'wasm',
     progress_callback: (event: { status?: string; progress?: number; loaded?: number; total?: number; file?: string }) => {
       if (event.status === 'progress' && typeof event.progress === 'number') {
-        post({ id: reportingId, type: 'progress', phase: 'download', progress: Math.round(event.progress), label: event.file || '模型分片下载中' });
+        post({ id: requestId, type: 'progress', phase: 'download', progress: Math.round(event.progress), label: event.file || '模型分片下载中' });
       }
     },
   }) as Promise<AutomaticSpeechRecognitionPipeline>;
@@ -74,18 +75,17 @@ async function getPipeline(model: string, source: WhisperSource): Promise<Automa
 
 self.onmessage = async (event: MessageEvent<Request>) => {
   const request = event.data;
-  reportingId = request.id;
   try {
     if (request.type === 'init') {
       const model = request.model || DEFAULT_MODEL;
-      await getPipeline(model, request.source);
+      await getPipeline(model, request.source, request.id);
       post({ id: request.id, type: 'progress', phase: 'ready', progress: 100, label: '模型已就绪' });
       // init 也要给一个终态，否则主线程 warmupWhisper() 的 Promise 永远不 resolve。
       post({ id: request.id, type: 'result', text: '' });
       return;
     }
     if (request.type === 'transcribe') {
-      const recognizer = await getPipeline(request.model || cachedModel || DEFAULT_MODEL, request.source || 'mirror');
+      const recognizer = await getPipeline(request.model || cachedModel || DEFAULT_MODEL, request.source || 'mirror', request.id);
       const audio = request.audio;
       if (!audio?.length) throw new Error('音频为空，无法转写');
       const output = await recognizer(audio, {
@@ -98,7 +98,7 @@ self.onmessage = async (event: MessageEvent<Request>) => {
       return;
     }
     if (request.type === 'transcribe-timed') {
-      const recognizer = await getPipeline(request.model || cachedModel || DEFAULT_MODEL, request.source || 'mirror');
+      const recognizer = await getPipeline(request.model || cachedModel || DEFAULT_MODEL, request.source || 'mirror', request.id);
       const audio = request.audio;
       if (!audio?.length) { post({ id: request.id, type: 'segments', chunks: [] }); return; }
       const output = await recognizer(audio, {

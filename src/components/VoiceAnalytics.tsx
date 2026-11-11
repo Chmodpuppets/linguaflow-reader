@@ -42,7 +42,12 @@ function Heatmap({ records }: { records: VoiceRecord[] }) {
       return { day: localDay(date), seconds, words, future: date > new Date() };
     });
   }, [records]);
-  return <div className="heatmap-wrap"><div className="heatmap-months"><span>NOV</span><span>JAN</span><span>MAR</span><span>MAY</span><span>JUL</span><span>SEP</span></div><div className="heatmap-grid">{days.map((day) => <i key={day.day} className={`${day.future ? 'future' : day.seconds === 0 ? '' : day.seconds < 120 ? 'level-1' : day.seconds < 300 ? 'level-2' : day.seconds < 600 ? 'level-3' : 'level-4'}`} title={`${day.day} · ${Math.round(day.seconds / 60)} 分钟 · ${day.words} 词`} />)}</div><div className="heatmap-legend"><span>少</span><i /><i className="level-1" /><i className="level-2" /><i className="level-3" /><i className="level-4" /><span>多</span></div></div>;
+  // 月份标签从实际日期范围推算，不再硬编码（跨年 / 不同起始月份时会标错）。
+  const monthLabels = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat('en-US', { month: 'short' });
+    return [0, 74, 148, 222, 296, 370].map((index) => formatter.format(new Date(`${days[index].day}T00:00:00`)).toUpperCase());
+  }, [days]);
+  return <div className="heatmap-wrap"><div className="heatmap-months">{monthLabels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div><div className="heatmap-grid">{days.map((day) => <i key={day.day} className={`${day.future ? 'future' : day.seconds === 0 ? '' : day.seconds < 120 ? 'level-1' : day.seconds < 300 ? 'level-2' : day.seconds < 600 ? 'level-3' : 'level-4'}`} title={`${day.day} · ${Math.round(day.seconds / 60)} 分钟 · ${day.words} 词`} />)}</div><div className="heatmap-legend"><span>少</span><i /><i className="level-1" /><i className="level-2" /><i className="level-3" /><i className="level-4" /><span>多</span></div></div>;
 }
 
 function TimeCapsule({ records }: { records: VoiceRecord[] }) {
@@ -76,6 +81,10 @@ function TimeCapsule({ records }: { records: VoiceRecord[] }) {
         const url = URL.createObjectURL(blob);
         urlsRef.current[id] = url;
         setUrls((current) => ({ ...current, [id]: url }));
+      }).catch(() => {
+        // IndexedDB 不可用时 readBlob 会 reject：不 catch 就是未捕获 rejection，
+        // 且 urls / missing 都不更新，UI 永远停在「正在读取本地录音…」。
+        if (active) setMissing((current) => new Set(current).add(id));
       });
     };
     if (a) load(a.id);
@@ -87,7 +96,7 @@ function TimeCapsule({ records }: { records: VoiceRecord[] }) {
     urlsRef.current = {};
   }, []);
   if (!group) return <div className="capsule-empty"><AudioLines size={26} /><h3>同一句，录两次，就会拥有时间胶囊</h3><p>选择同一原句在不同日期练习，这里会开放 A/B 声音与流利度对比。</p></div>;
-  return <div className="time-capsule"><div className="capsule-target"><label>对比原句<select value={groupIndex} onChange={(event) => { setGroupIndex(Number(event.target.value)); setAId(''); setBId(''); }}>{groups.map(([text], index) => <option value={index} key={text}>{text.slice(0, 90)}</option>)}</select></label><p>{group[0]}</p></div><div className="ab-grid">{[{ record: a, label: 'BEFORE · 较早录音', set: setAId }, { record: b, label: 'AFTER · 最近录音', set: setBId }].map(({ record, label, set }) => <div className="ab-card" key={label}><span>{label}</span><select value={record.id} onChange={(event) => set(event.target.value)}>{ordered.map((item) => <option value={item.id} key={item.id}>{new Date(item.createdAt).toLocaleDateString('zh-CN')} · {item.metrics.wpm} WPM</option>)}</select><div className="ab-metrics"><strong>{record.metrics.wpm}<small>WPM</small></strong><strong>{record.metrics.pauseRatio}<small>% 卡顿</small></strong><strong>{record.metrics.accuracy}<small>% 匹配</small></strong></div>{urls[record.id] ? <audio src={urls[record.id]} controls preload="metadata" /> : missing.has(record.id) ? <div className="audio-loading muted"><Play size={14} />录音文件不在本机（导出时不含音频）</div> : <div className="audio-loading"><Play size={14} />正在读取本地录音…</div>}</div>)}</div></div>;
+  return <div className="time-capsule"><div className="capsule-target"><label>对比原句<select value={groupIndex} onChange={(event) => { setGroupIndex(Number(event.target.value)); setAId(''); setBId(''); }}>{groups.map(([text], index) => <option value={index} key={text}>{text.slice(0, 90)}</option>)}</select></label><p>{group[0]}</p></div><div className="ab-grid">{[{ record: a, label: 'BEFORE · 较早录音', set: setAId }, { record: b, label: 'AFTER · 最近录音', set: setBId }].map(({ record, label, set }) => <div className="ab-card" key={label}><span>{label}</span><select value={record.id} onChange={(event) => set(event.target.value)}>{ordered.map((item) => <option value={item.id} key={item.id}>{new Date(item.createdAt).toLocaleDateString('zh-CN')} · {item.metrics.wpm} WPM</option>)}</select><div className="ab-metrics"><strong>{record.metrics.wpm}<small>WPM</small></strong><strong>{record.metrics.pauseRatio}<small>% 卡顿</small></strong><strong>{record.metrics.accuracy}<small>% 匹配</small></strong></div>{urls[record.id] ? <audio src={urls[record.id]} controls preload="metadata" /> : missing.has(record.id) ? <div className="audio-loading muted"><Play size={14} />录音不可读（不在本机，或本地存储不可用）</div> : <div className="audio-loading"><Play size={14} />正在读取本地录音…</div>}</div>)}</div></div>;
 }
 
 export default function VoiceAnalytics({ records, vocabulary, onPractice }: { records: VoiceRecord[]; vocabulary: VocabEntry[]; onPractice: () => void }) {
@@ -95,7 +104,7 @@ export default function VoiceAnalytics({ records, vocabulary, onPractice }: { re
   const totalWords = records.reduce((sum, record) => sum + record.metrics.wordCount, 0);
   const errorWords = useMemo(() => {
     const counts = new Map<string, number>();
-    records.forEach((record) => record.diffTokens.filter((token) => token.status === 'missing' || token.status === 'substitute').forEach((token) => counts.set(token.text, (counts.get(token.text) || 0) + 1)));
+    records.forEach((record) => (record.diffTokens || []).filter((token) => token.status === 'missing' || token.status === 'substitute').forEach((token) => counts.set(token.text, (counts.get(token.text) || 0) + 1)));
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
   }, [records]);
   const activated = vocabulary.filter((entry) => (entry.spokenCount || 0) >= 1).length;

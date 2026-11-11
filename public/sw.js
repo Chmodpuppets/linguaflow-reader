@@ -13,10 +13,11 @@ const SHELL = ['/', '/manifest.webmanifest', '/linguaflow-icon.png'];
 
 // 本机版权素材（书籍扫描图 / 音频 / 正文 JSON）不随公开构建产物分发，
 // 也不进 Cache Storage，避免撑爆配额。缓存只覆盖：应用外壳 + 构建产物 + wasm 运行时。
+// /books/ 下的扫描图同样不进缓存（与注释一致；此前代码放行了图片路径）。
 function cacheable(url) {
   const path = new URL(url).pathname;
-  if (path.endsWith('.mp3') || path.includes('/audio')) return false;
-  return path === '/' || path.startsWith('/assets/') || path.startsWith('/wasm/') || path.includes('/books/');
+  if (path.endsWith('.mp3') || path.includes('/audio') || path.includes('/books/') || path.includes('/local-content/')) return false;
+  return path === '/' || path.startsWith('/assets/') || path.startsWith('/wasm/');
 }
 // 预缓存（install 管理，永不裁剪）与运行时缓存分开：
 // 长期使用时 cache.put 会无限累积，单独设上限才不会撑爆配额。
@@ -36,7 +37,8 @@ async function trimRuntimeCache(cache) {
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.addAll(SHELL);
+    // 与下方清单资源同一标准：单个外壳资源失败不阻断整个 install。
+    await Promise.allSettled(SHELL.map((url) => cache.add(url)));
     // 绕过 HTTP 缓存拿最新的 index.html，避免 install 时把上一版的资源清单又缓存一遍。
     const response = await fetch('/', { cache: 'reload' });
     const html = await response.text();

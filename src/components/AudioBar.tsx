@@ -120,7 +120,7 @@ export default function AudioBar({ book, src, page, onNotify }: { book: Book; sr
   const anchorHere = () => {
     const audio = audioRef.current;
     const t = audio ? audio.currentTime : 0;
-    if (!t) { onNotify('先播放一点，再锚定本页'); return; }
+    // 0:00 是合法锚点（第一页往往从头开始）；旧写法 if (!t) 把 0 当成「没播放」。
     const prev = anchorsRef.current;
     const existing = prev[page];
     if (existing != null && Math.abs(existing - t) < 2.5) {

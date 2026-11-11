@@ -60,7 +60,9 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .collapsed .workspace-label { min-height: 28px; margin-block: 18px 10px; }
 .main-nav { display: flex; flex-direction: column; gap: 5px; }
 .nav-item { position: relative; border: 1px solid transparent; background: transparent; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; border-radius: 12px; padding: 9px 11px; color: var(--muted); text-align: left; transition: .2s ease; }
-.nav-item:hover { background: rgba(255,255,255,.035); color: var(--text); transform: translateX(2px); }
+/* hover 只做颜色变化，不做位移：translateX 过渡会让自动化点击的「元素稳定」
+   检查在低性能机器上反复振荡（E2E flaky 根源），对真人用户也没有可感知收益。 */
+.nav-item:hover { background: rgba(255,255,255,.035); color: var(--text); }
 .nav-item.active { background: linear-gradient(100deg, rgba(124,108,255,.16), rgba(34,211,238,.045)); border-color: rgba(139,92,246,.28); color: #ddd6fe; box-shadow: 0 0 20px rgba(124,108,255,.07); }
 .nav-item.active:before { content: ''; position: absolute; left: -12px; top: 15px; bottom: 15px; width: 3px; border-radius: 3px; background: linear-gradient(#8b5cf6,#22d3ee); }
 .nav-item svg { flex: 0 0 auto; }
@@ -100,6 +102,9 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .button-secondary:hover:not(:disabled) { background: rgba(139,92,246,.12); border-color: rgba(139,92,246,.45); }
 .button-ghost { background: transparent; color: var(--muted); }
 .button-ghost:hover:not(:disabled) { background: rgba(255,255,255,.045); color: var(--text); }
+.button-danger { color: #fff; background: linear-gradient(105deg,#fb7185,#e11d48); box-shadow: 0 8px 24px -12px rgba(244,63,94,.7); }
+.button-danger:hover:not(:disabled) { box-shadow: 0 10px 30px -10px rgba(244,63,94,.6); }
+.confirm-message { color: var(--muted); font-size: 12px; line-height: 1.75; margin: 4px 0 0; }
 .button-sm { min-height: 34px; padding: 7px 12px; font-size: 11px; border-radius: 9px; }
 .button-md { min-height: 42px; padding: 10px 17px; font-size: 12px; }
 .button-lg { min-height: 48px; padding: 13px 21px; font-size: 13px; }
@@ -475,6 +480,8 @@ h1,h2,h3,h4,p { margin-top: 0; }
 
 .toast { position: fixed; z-index: 200; right: 25px; bottom: 25px; max-width: min(420px,calc(100vw - 30px)); border-radius: 13px; padding: 14px 18px; display: flex; align-items: center; gap: 10px; color: #d1fae5; font-size: 11px; animation: toast-in .25s ease; }
 .toast svg { color: #34d399; flex: 0 0 auto; }
+.toast.toast-error { color: #fecaca; }
+.toast.toast-error svg { color: #f87171; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } }
 .loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #07070e; }
 .loading-screen img { width: 62px; height: 62px; margin-bottom: 25px; }

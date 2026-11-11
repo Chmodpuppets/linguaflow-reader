@@ -82,7 +82,9 @@ export async function importEpub(file: File, onProgress?: (progress: ImportProgr
     const paragraphs = blocks
       .filter((block) => !/^H[1-3]$/.test(block.tagName))
       .map((block) => block.textContent?.replace(/\s+/g, ' ').trim() || '')
-      .filter((text) => text.length > 24);
+      // 只滤掉页码 / 纯符号噪声，保留短对话（"Yes," he said.）。
+      // 旧写法 length > 24 会把小说里的短句整段丢掉，破坏原文完整性。
+      .filter((text) => text.length >= 2 && /[a-zA-Z\u4e00-\u9fff]/.test(text) && !/^\d+$/.test(text));
     if (!paragraphs.length) {
       const bodyText = html.body?.textContent?.replace(/\s+/g, ' ').trim() || '';
       if (bodyText.length > 40) paragraphs.push(bodyText);

@@ -1,14 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import AppShell from './components/AppShell';
+import { ConfirmDialog } from './components/UI';
 import Library from './components/Library';
-import Vocabulary from './components/Vocabulary';
-import Review from './components/Review';
-import Notes from './components/Notes';
-import Settings from './components/Settings';
 import { initialData } from './data/initialData';
 import { loadBuiltinBooks } from './data/builtinBooks';
-import { deleteAlignment, deleteBookAudio, loadData, saveData, saveVoiceAudio } from './lib/db';
+import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, type StorageChannel } from './lib/db';
 import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
@@ -20,6 +17,11 @@ import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, VocabEn
 const Reader = lazy(() => import('./components/Reader'));
 const VoiceLab = lazy(() => import('./components/VoiceLab'));
 const VoiceAnalytics = lazy(() => import('./components/VoiceAnalytics'));
+// 首屏只需要同步的书库；其余页面按需加载，进一步瘦身主包。
+const Vocabulary = lazy(() => import('./components/Vocabulary'));
+const Review = lazy(() => import('./components/Review'));
+const Notes = lazy(() => import('./components/Notes'));
+const Settings = lazy(() => import('./components/Settings'));
 
 type NewVocab = Omit<VocabEntry, 'id' | 'createdAt' | 'familiarity' | 'dueAt' | 'reviewCount'>;
 type NewHighlight = Omit<Highlight, 'id' | 'createdAt'>;
@@ -70,9 +72,13 @@ export default function App() {
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [storageChannel, setStorageChannel] = useState<StorageChannel>('indexeddb');
   const saveTimer = useRef<number | null>(null);
+  const toastTimer = useRef(0);
+  // 应用内确认弹窗（替代原生 confirm）：askConfirm 返回 Promise，ESC/遮罩/取消都 resolve(false)。
+  const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null);
   const activeBook = data.books.find((book) => book.id === activeBookId) || null;
   const savedWords = useMemo(() => data.vocabulary.map((entry) => entry.word), [data.vocabulary]);
   const dueCount = data.vocabulary.filter((entry) => new Date(entry.dueAt).getTime() <= Date.now()).length;
@@ -84,6 +90,7 @@ export default function App() {
         // 第一阶段：只等 IndexedDB + 轻量样书，首屏立刻可用
         const stored = await loadData();
         if (cancelled) return;
+        setStorageChannel(getStorageChannel());
         if (stored) {
           const migrated: AppData = {
             ...stored,
@@ -98,8 +105,8 @@ export default function App() {
       } catch {
         // 本地数据损坏 / IndexedDB 被禁用时，绝不能让 setReady 被跳过（否则永久 loading）。
         if (!cancelled) {
-          setToast('本地数据读取失败，已打开一个干净的阅读空间');
-          window.setTimeout(() => setToast(''), 3200);
+          setStorageChannel('none');
+          notify('本地数据读取失败，已打开一个干净的阅读空间', 'error');
         }
       } finally {
         if (!cancelled) setReady(true);
@@ -133,9 +140,11 @@ export default function App() {
     // 只存瘦身后的书 + 防抖，翻页/标记不再整本书序列化
     const snapshot = { ...data, books: slimForStorage(data.books) };
     // 双通道（IndexedDB + localStorage）都写失败时给用户一句话，不再静默吞掉。
-    const persist = () => { void saveData(snapshot).catch(() => {
-      setToast('本地数据保存失败，请检查浏览器存储空间或配额');
-      window.setTimeout(() => setToast(''), 3200);
+    const persist = () => { void saveData(snapshot).then(() => {
+      setStorageChannel(getStorageChannel());
+    }).catch(() => {
+      setStorageChannel(getStorageChannel());
+      notify('本地数据保存失败，请检查浏览器存储空间或配额', 'error');
     }); };
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(persist, 400);
@@ -144,10 +153,14 @@ export default function App() {
     return () => window.removeEventListener('pagehide', flush);
   }, [data, ready]);
 
-  const notify = (message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(''), 3200);
+  // 清掉上一条的定时器：否则前一条的 3200ms 到期会提前清掉后一条 toast。
+  const notify = (message: string, tone: 'success' | 'error' = 'success') => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ message, tone });
+    toastTimer.current = window.setTimeout(() => setToast(null), 3200);
   };
+  const askConfirm = (options: { title: string; message: string; confirmLabel?: string; danger?: boolean }) => new Promise<boolean>((resolve) => { setConfirmState({ ...options, resolve }); });
+  const closeConfirm = (ok: boolean) => { confirmState?.resolve(ok); setConfirmState(null); };
   const updateBook = (id: string, update: Partial<Book>) => setData((current) => ({ ...current, books: current.books.map((book) => book.id === id ? { ...book, ...update } : book) }));
   const updateSettings = (settings: Partial<ReaderSettings>) => setData((current) => ({ ...current, settings: { ...current.settings, ...settings } }));
   const openBook = (book: Book) => {
@@ -165,12 +178,16 @@ export default function App() {
   };
   const addVocab = (entry: NewVocab) => setData((current) => ({ ...current, vocabulary: [{ ...entry, id: makeId('vocab'), createdAt: new Date().toISOString(), familiarity: 0, dueAt: new Date().toISOString(), reviewCount: 0 }, ...current.vocabulary] }));
   const addHighlight = (highlight: NewHighlight) => setData((current) => ({ ...current, highlights: [{ ...highlight, id: makeId('mark'), createdAt: new Date().toISOString() }, ...current.highlights] }));
-  const deleteVocab = (id: string) => { if (window.confirm('确定删除这个词条吗？原文和复习记录也会从词汇本移除。')) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) })); };
-  const deleteBook = (id: string) => {
+  const deleteVocab = async (id: string) => {
+    const ok = await askConfirm({ title: '删除词条', message: '确定删除这个词条吗？原文和复习记录也会从词汇本移除。', confirmLabel: '删除', danger: true });
+    if (ok) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
+  };
+  const deleteBook = async (id: string) => {
     const book = data.books.find((item) => item.id === id);
     // 内置样书来自 STATIC_CONTENT，删了下次 hydrate 又会回来，只允许删自己导入的 EPUB。
     if (!book || book.source !== 'epub') return;
-    if (!window.confirm(`确定删除《${book.title}》吗？这本书的笔记、词条、复习记录和练习记录也会一并移除。`)) return;
+    const ok = await askConfirm({ title: '删除书籍', message: `确定删除《${book.title}》吗？这本书的笔记、词条、复习记录和练习记录也会一并移除。`, confirmLabel: '删除', danger: true });
+    if (!ok) return;
     setData((current) => {
       const removedVocabIds = new Set(current.vocabulary.filter((entry) => entry.bookId === id).map((entry) => entry.id));
       return {
@@ -191,13 +208,16 @@ export default function App() {
     notify(`已删除《${book.title}》`);
   };
   const deleteHighlight = (id: string) => setData((current) => ({ ...current, highlights: current.highlights.filter((item) => item.id !== id) }));
-  const saveVoiceRecord = async (record: VoiceRecord, audio: Blob) => {
+  // 返回落盘结果：VoiceRecorder 据此决定是否显示「已保存」，写失败不再谎报成功。
+  const saveVoiceRecord = async (record: VoiceRecord, audio: Blob): Promise<boolean> => {
     // 先确保录音 Blob 落盘，再计入统计：写失败时不产生「有记录无音频」的孤儿。
     try {
       await saveVoiceAudio(record.id, audio);
       setData((current) => ({ ...current, voiceRecords: [record, ...current.voiceRecords.filter((item) => item.id !== record.id)] }));
+      return true;
     } catch {
-      notify('录音文件保存失败，本次练习未计入统计，请检查浏览器存储空间');
+      notify('录音文件保存失败，本次练习未计入统计，请检查浏览器存储空间', 'error');
+      return false;
     }
   };
   const activateSpokenWord = (word: string) => setData((current) => ({
@@ -219,7 +239,10 @@ export default function App() {
       notify(message);
       throw new Error(message);
     }
-    if (file.size > WARN_EPUB_BYTES && !window.confirm(`这个文件有 ${(file.size / 1048576).toFixed(0)}MB，解析会较慢并占用内存。继续导入吗？`)) return;
+    if (file.size > WARN_EPUB_BYTES) {
+      const ok = await askConfirm({ title: '导入大文件', message: `这个文件有 ${(file.size / 1048576).toFixed(0)}MB，解析会较慢并占用内存。继续导入吗？`, confirmLabel: '继续导入' });
+      if (!ok) return;
+    }
     setImporting(true);
     setImportProgress({ phase: 'reading', progress: 0, label: '准备读取文件…' });
     try {
@@ -228,7 +251,7 @@ export default function App() {
       setData((current) => ({ ...current, books: [book, ...current.books] }));
       setActiveBookId(book.id);
       notify(`已导入《${book.title}》，共 ${book.chapters.length} 个章节`);
-    } catch (error) { notify(error instanceof Error ? error.message : 'EPUB 导入失败，请检查文件。'); throw error; }
+    } catch (error) { notify(error instanceof Error ? error.message : 'EPUB 导入失败，请检查文件。', 'error'); throw error; }
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {
@@ -248,7 +271,12 @@ export default function App() {
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
   else if (page === 'voice-analytics') content = <VoiceAnalytics records={data.voiceRecords} vocabulary={data.vocabulary} onPractice={() => setPage('voice-lab')} />;
   else if (page === 'notes') content = <Notes highlights={data.highlights} books={data.books} onOpenSource={openSource} onDelete={deleteHighlight} />;
-  else content = <Settings settings={data.settings} data={data} books={data.books} storageReady={ready} onSettings={updateSettings} onExport={() => downloadJson(`linguaflow-reader-${new Date().toISOString().slice(0, 10)}.json`, data)} onImport={restore} onNotify={notify} />;
+  else content = <Settings settings={data.settings} data={data} books={data.books} storageChannel={storageChannel} onSettings={updateSettings} onExport={() => {
+    // 恢复上限是 20MB：导出超限时先提醒，避免「自己的备份恢复不回来」。
+    const bytes = JSON.stringify(data).length;
+    if (bytes > 20 * 1024 * 1024) notify(`备份约 ${(bytes / 1048576).toFixed(0)}MB，超过 20MB 恢复上限，建议先清理大书再导出`, 'error');
+    downloadJson(`linguaflow-reader-${new Date().toISOString().slice(0, 10)}.json`, data);
+  }} onImport={restore} onNotify={notify} />;
 
-  return <div className={data.settings.reducedAmbient ? 'reduce-ambient' : ''}><AppShell page={page} onNavigate={(target) => { setActiveBookId(null); setPage(target); }} vocabCount={data.vocabulary.length} dueCount={dueCount} online={online}><Suspense fallback={<div className="route-loading"><div className="loading-line"><span /></div><p>正在载入…</p></div>}>{content}</Suspense></AppShell>{toast && <div className="toast glass-panel"><CheckCircle2 size={18} /><span>{toast}</span></div>}</div>;
+  return <div className={data.settings.reducedAmbient ? 'reduce-ambient' : ''}><AppShell page={page} onNavigate={(target) => { setActiveBookId(null); setPage(target); }} vocabCount={data.vocabulary.length} dueCount={dueCount} online={online}><Suspense fallback={<div className="route-loading"><div className="loading-line"><span /></div><p>正在载入…</p></div>}>{content}</Suspense></AppShell>{confirmState && <ConfirmDialog title={confirmState.title} message={confirmState.message} confirmLabel={confirmState.confirmLabel} danger={confirmState.danger} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}{toast && <div className={`toast glass-panel ${toast.tone === 'error' ? 'toast-error' : ''}`} role="status" aria-live="polite">{toast.tone === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}<span>{toast.message}</span></div>}</div>;
 }

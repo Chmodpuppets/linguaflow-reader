@@ -39,7 +39,9 @@ function OcrLayer({ blocks, onWord, onSelect }: { blocks: OcrBlock[]; onWord: (w
 }
 
 function RichParagraph({ text, marks }: { text: string; marks: Highlight[] }) {
-  const ranges = marks.map((mark) => ({ mark, start: text.indexOf(mark.text) })).filter((item) => item.start >= 0).sort((a, b) => a.start - b.start);
+  // 优先用划选时记录的偏移：同一段里出现重复文本时，indexOf 永远命中第一处，
+  // 会把高亮画在用户没选过的位置。旧数据没有 offset 时回退 indexOf。
+  const ranges = marks.map((mark) => ({ mark, start: typeof mark.offset === 'number' && mark.offset >= 0 && text.startsWith(mark.text, mark.offset) ? mark.offset : text.indexOf(mark.text) })).filter((item) => item.start >= 0).sort((a, b) => a.start - b.start);
   if (!ranges.length) return <WordText text={text} />;
   const parts: React.ReactNode[] = [];
   let cursor = 0;
@@ -63,10 +65,11 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   onSettings: (settings: Partial<ReaderSettings>) => void;
   onAddVocab: (entry: NewVocab) => void;
   onAddHighlight: (highlight: NewHighlight) => void;
-  onSaveVoice: (record: VoiceRecord, audio: Blob) => void;
+  onSaveVoice: (record: VoiceRecord, audio: Blob) => Promise<boolean>;
   onNotify: (message: string) => void;
 }) {
-  const [chapterIndex, setChapterIndex] = useState(Math.min(book.currentChapter, book.chapters.length - 1));
+  // 钳制到 [0, chapters.length-1]：损坏备份里的负数 / NaN currentChapter 不能算出 -1 索引。
+  const [chapterIndex, setChapterIndex] = useState(() => Math.max(0, Math.min(Number(book.currentChapter) || 0, book.chapters.length - 1)));
   const [contentsOpen, setContentsOpen] = useState(() => window.innerWidth >= 1180);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [selection, setSelection] = useState<SelectionState | null>(null);
@@ -85,19 +88,19 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
   // 页码只用于内置扫描书的图片 / OCR 映射。不假设 chapter.id 一定是 `page-N`，
   // 也不把 EPUB 的 `chapter-N` 误当页码 —— 有 pageImages 的书才解析，其余回退章节序号。
   const pageNumber = book.pageImages
-    ? Number(chapter.title.match(/\d+/)?.[0] || chapter.id.match(/\d+/)?.[0] || chapterIndex + 1)
+    ? Number(chapter?.title.match(/\d+/)?.[0] || chapter?.id.match(/\d+/)?.[0] || chapterIndex + 1)
     : chapterIndex + 1;
   const pageImage = book.pageImages?.[pageNumber];
   const pageBlocks = book.pageBlocks?.[pageNumber] || [];
   // 版权扫描图不随开源仓库分发；换页 / 换书时重置缺失提示。
   useEffect(() => { setImageMissing(false); }, [book.id, pageNumber]);
-  const pageText = chapter.paragraphs.join(' ');
+  const pageText = chapter?.paragraphs.join(' ') || '';
   const dictionary = lookup ? lookupWord(lookup.word) : undefined;
   const isSaved = lookup ? savedWords.includes(normalizeWord(lookup.word)) : false;
-  const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter.id), [highlights, book.id, chapter.id]);
+  const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter?.id), [highlights, book.id, chapter?.id]);
 
   useEffect(() => {
-    onUpdateBook(book.id, { currentChapter: chapterIndex, currentParagraph: 0, progress: Math.round((chapterIndex / book.chapters.length) * 100), lastReadAt: new Date().toISOString() });
+    onUpdateBook(book.id, { currentChapter: chapterIndex, currentParagraph: 0, progress: book.chapters.length ? Math.round((chapterIndex / book.chapters.length) * 100) : 0, lastReadAt: new Date().toISOString() });
     setLookup(null);
     setSelection(null);
     const target = book.currentParagraph;
@@ -116,8 +119,14 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
       const startParagraph = startElement?.closest('[data-paragraph]');
       const endParagraph = endElement?.closest('[data-paragraph]');
       if (!startParagraph || startParagraph !== endParagraph) return;
+      // 记录划选起点在段落内的字符偏移：渲染文本与原文逐字一致，
+      // 用 pre-caret range 的文本长度即可定位重复文本中的实际划选处。
+      const pre = range.cloneRange();
+      pre.selectNodeContents(startParagraph);
+      pre.setEnd(range.startContainer, range.startOffset);
+      const offset = pre.toString().length;
       const rect = range.getBoundingClientRect();
-      setSelection({ text, context: chapter.paragraphs[paragraphIndex], bookId: book.id, chapterId: chapter.id, paragraphIndex, x: Math.max(145, Math.min(window.innerWidth - 145, rect.left + rect.width / 2)), y: Math.max(74, rect.top - 10) });
+      setSelection({ text, context: chapter.paragraphs[paragraphIndex], bookId: book.id, chapterId: chapter.id, paragraphIndex, offset, x: Math.max(145, Math.min(window.innerWidth - 145, rect.left + rect.width / 2)), y: Math.max(74, rect.top - 10) });
     }, 10);
   };
 
@@ -153,7 +162,7 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
 
   const saveHighlight = (withNote = false) => {
     if (!selection) return;
-    onAddHighlight({ bookId: book.id, chapterId: chapter.id, paragraphIndex: selection.paragraphIndex, text: selection.text, note: withNote ? note : '', color: 'violet' });
+    onAddHighlight({ bookId: book.id, chapterId: chapter.id, paragraphIndex: selection.paragraphIndex, text: selection.text, offset: selection.offset, note: withNote ? note : '', color: 'violet' });
     window.getSelection()?.removeAllRanges();
     setSelection(null);
     setNoteOpen(false);
@@ -183,20 +192,39 @@ export default function Reader({ book, settings, highlights, savedWords, onBack,
     if (window.innerWidth < 1100) setContentsOpen(false);
   };
 
-  // 键盘翻页（图片模式尤其需要），以及切换视图时收起缩放
+  // 键盘翻页（图片模式尤其需要），以及切换视图时收起缩放。
+  // 查词面板 / 笔记 Modal / 跟读抽屉 / 版式面板打开时不响应，避免在遮罩后偷偷翻页。
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.target as HTMLElement)?.closest('input, textarea')) return;
+      if (lookup || noteOpen || voiceTarget || appearanceOpen || selection) return;
       if (event.key === 'ArrowRight' || event.key === 'PageDown') goToChapter(chapterIndex + 1);
       else if (event.key === 'ArrowLeft' || event.key === 'PageUp') goToChapter(chapterIndex - 1);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [chapterIndex, book.chapters.length]);
+  }, [chapterIndex, book.chapters.length, lookup, noteOpen, voiceTarget, appearanceOpen, selection]);
+
+  // ESC 逐层关闭自定义面板（跟读抽屉 > 查词 > 划选 > 版式）。
+  // 笔记 Modal 自带 ESC（capture + stopPropagation），这里 noteOpen 时让位给它。
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || noteOpen) return;
+      if (voiceTarget) { setVoiceTarget(''); return; }
+      if (lookup) { setLookup(null); return; }
+      if (selection) { setSelection(null); return; }
+      if (appearanceOpen) setAppearanceOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [voiceTarget, lookup, selection, appearanceOpen, noteOpen]);
 
   useEffect(() => { setZoom(false); setSelection(null); setLookup(null); }, [viewMode, chapterIndex]);
 
   const switchView = (mode: 'text' | 'image') => { setViewMode(mode); };
+
+  // 空章节的书（损坏数据 / 解析异常）给降级提示而不是让 chapter.paragraphs 抛错白屏。
+  if (!chapter) return <div className={`reader-page reader-theme-${settings.theme}`}><div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>无法阅读</span></div></div></div><div className="reader-layout"><article className="reader-article"><div className="empty-page-note"><p>这本书没有可阅读的章节，可能是备份数据损坏或导入不完整。请返回书库删除后重新导入。</p><Button variant="secondary" onClick={onBack}><ArrowLeft size={16} />返回书库</Button></div></article></div></div>;
 
   return <div className={`reader-page reader-theme-${settings.theme}`}>
     <div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>{chapter.title}</span></div></div><div className="reader-toolbar-center"><span>CHAPTER {String(chapterIndex + 1).padStart(2, '0')}</span><ProgressBar value={Math.round(((chapterIndex + 1) / book.chapters.length) * 100)} /></div><div className="reader-toolbar-actions"><button className={`icon-button ${contentsOpen ? 'active' : ''}`} onClick={() => setContentsOpen(!contentsOpen)} aria-label="目录"><List size={19} /></button>{canImage && <div className="view-toggle" role="group" aria-label="阅读模式"><button className={`icon-button ${viewMode === 'text' ? 'active' : ''}`} onClick={() => switchView('text')} aria-label="文字模式" title="文字模式"><Type size={18} /></button><button className={`icon-button ${viewMode === 'image' ? 'active' : ''}`} onClick={() => switchView('image')} aria-label="图片模式" title="原书图片"><ImageIcon size={18} /></button></div>}<div className="appearance-wrap"><button className={`icon-button ${appearanceOpen ? 'active' : ''}`} onClick={() => setAppearanceOpen(!appearanceOpen)} aria-label="阅读版式"><Settings2 size={19} /></button>{appearanceOpen && <div className="appearance-panel glass-panel"><span className="eyebrow">READING APPEARANCE</span><h3>让正文更适合你</h3><div className="setting-row"><span>字号</span><div className="stepper"><button onClick={() => onSettings({ fontSize: Math.max(16, settings.fontSize - 1) })}><Minus size={15} /></button><strong>{settings.fontSize}</strong><button onClick={() => onSettings({ fontSize: Math.min(26, settings.fontSize + 1) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>行距</span><div className="stepper"><button onClick={() => onSettings({ lineHeight: Math.max(1.5, Number((settings.lineHeight - 0.1).toFixed(1))) })}><Minus size={15} /></button><strong>{settings.lineHeight.toFixed(1)}</strong><button onClick={() => onSettings({ lineHeight: Math.min(2.1, Number((settings.lineHeight + 0.1).toFixed(1))) })}><Plus size={15} /></button></div></div><div className="theme-options">{(['midnight', 'sepia', 'paper'] as const).map((theme) => <button key={theme} className={`${theme} ${settings.theme === theme ? 'active' : ''}`} onClick={() => onSettings({ theme })}><span>Aa</span><small>{theme === 'midnight' ? '暗夜' : theme === 'sepia' ? '羊皮纸' : '白纸'}</small></button>)}</div></div>}</div></div></div>

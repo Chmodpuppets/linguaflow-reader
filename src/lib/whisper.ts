@@ -101,12 +101,17 @@ export type WhisperSource = 'mirror' | 'official' | 'local';
 const SOURCE_KEY = 'lf-whisper-source';
 
 export function whisperSource(): WhisperSource {
-  const stored = localStorage.getItem(SOURCE_KEY) as WhisperSource | null;
-  return stored === 'official' || stored === 'local' ? stored : 'mirror';
+  // 存储被禁用（阻止所有 Cookie 等）时 localStorage 直接抛错；降级为默认源。
+  try {
+    const stored = localStorage.getItem(SOURCE_KEY) as WhisperSource | null;
+    return stored === 'official' || stored === 'local' ? stored : 'mirror';
+  } catch {
+    return 'mirror';
+  }
 }
 
 export function setWhisperSource(source: WhisperSource): void {
-  localStorage.setItem(SOURCE_KEY, source);
+  try { localStorage.setItem(SOURCE_KEY, source); } catch { /* 仅本次会话内生效 */ }
 }
 
 export const WHISPER_SOURCE_LABEL: Record<WhisperSource, string> = {

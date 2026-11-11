@@ -8,9 +8,27 @@ const BOOK_AUDIO_STORE = 'book-audio';
 const ALIGNMENT_STORE = 'alignment';
 const KEY = 'reader-data-v1';
 
+/** 最近一次成功读写的通道，供设置页如实展示存储状态（而不是把「初始化完成」当成「IDB 已连接」）。 */
+export type StorageChannel = 'indexeddb' | 'localstorage' | 'none';
+let lastChannel: StorageChannel = 'none';
+export function getStorageChannel(): StorageChannel { return lastChannel; }
+
+// 复用单条连接：此前每次操作都 open() 且从不 close()，长会话会累积连接；
+// 缓存后旧标签页升级版本时也能通过 onversionchange 主动让位。
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 4);
+    let settled = false;
+    // 旧标签页握着低版本连接时 open(4) 会触发 blocked 且永不 settle；
+    // 没有超时兜底的话 loadData 的 catch 接不到 hang，App 会永久停在 loading。
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('本地数据库打开超时：可能被另一个标签页占用，请关闭其他标签后重试'));
+    }, 6000);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
@@ -20,26 +38,46 @@ function openDatabase(): Promise<IDBDatabase> {
       // 运行时 Whisper 对齐结果，按 bookId 存 {t,s,e}[]。
       if (!db.objectStoreNames.contains(ALIGNMENT_STORE)) db.createObjectStore(ALIGNMENT_STORE);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      if (settled) { request.result.close(); return; }
+      settled = true;
+      window.clearTimeout(timer);
+      const db = request.result;
+      // 别的标签页要升级版本时让出连接，下次操作重新 open。
+      db.onversionchange = () => { db.close(); dbPromise = null; };
+      db.onclose = () => { dbPromise = null; };
+      resolve(db);
+    };
+    request.onerror = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      reject(request.error);
+    };
   });
+  dbPromise.catch(() => { dbPromise = null; });
+  return dbPromise;
 }
 
 export async function loadData(): Promise<AppData | null> {
   try {
     const db = await openDatabase();
-    return await new Promise((resolve, reject) => {
+    const data = await new Promise<AppData | null>((resolve, reject) => {
       const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
       request.onsuccess = () => resolve((request.result as AppData | undefined) || null);
       request.onerror = () => reject(request.error);
     });
+    lastChannel = 'indexeddb';
+    return data;
   } catch {
     // localStorage 兜底里的 JSON.parse 也可能抛（备份损坏）。若让它冒泡到 App 的初始化
     // IIFE，setReady(true) 将永不执行，页面会永久停在 loading —— 这里必须吞掉并降级为「无本地数据」。
     try {
       const fallback = localStorage.getItem(KEY);
+      lastChannel = 'localstorage';
       return fallback ? JSON.parse(fallback) as AppData : null;
     } catch {
+      lastChannel = 'none';
       return null;
     }
   }
@@ -54,11 +92,14 @@ export async function saveData(data: AppData): Promise<void> {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     });
+    lastChannel = 'indexeddb';
   } catch {
     try {
       localStorage.setItem(KEY, JSON.stringify(data));
+      lastChannel = 'localstorage';
     } catch {
       // 两个通道都写不了：必须让调用方知道，不能静默丢数据。
+      lastChannel = 'none';
       throw new Error('本地存储写入失败：IndexedDB 与 localStorage 都不可用或配额已满');
     }
   }
@@ -101,6 +142,17 @@ export function listVoiceAudioIds(): Promise<string[]> {
     request.onsuccess = () => resolve((request.result as IDBValidKey[]).map(String));
     request.onerror = () => reject(request.error);
   }));
+}
+
+/**
+ * 找出「有 Blob、没有对应练习记录」的孤立录音 id。
+ * 刻意**只检测、不删除**：导入旧备份时按 id 差集自动删，会误删本机新录、还没进备份的音。
+ * 删除一律交给用户在 OrphanAudioCleanup 里手动确认；restore 后只用它来提示孤儿数量。
+ */
+export async function findOrphanVoiceAudioIds(records: { id: string }[]): Promise<string[]> {
+  const ids = await listVoiceAudioIds();
+  const known = new Set(records.map((record) => record.id));
+  return ids.filter((id) => !known.has(id));
 }
 
 // —— 用户绑定的书本原音（独立于 AppData，不进 JSON 备份，不受 slimForStorage 影响）——
