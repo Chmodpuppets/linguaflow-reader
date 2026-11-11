@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Highlighter, Image as ImageIcon, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
 import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord } from '../types';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
@@ -8,6 +8,10 @@ import { useBookAudioSrc } from '../lib/bookAudio';
 import { Button, Modal, ProgressBar } from './UI';
 import AudioBar from './AudioBar';
 import VoiceRecorder from './VoiceRecorder';
+
+// 有声书绑定面板懒加载：它依赖本地 Whisper 对齐（较重），只在用户打开「边听边看」抽屉时才拉取，
+// 不拖慢阅读页首屏。
+const AudioBindingPanel = lazy(() => import('./AudioBinding'));
 
 type NewVocab = Omit<VocabEntry, 'id' | 'createdAt' | 'familiarity' | 'dueAt' | 'reviewCount'>;
 type NewHighlight = Omit<Highlight, 'id' | 'createdAt'>;
@@ -90,9 +94,16 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   const [viewMode, setViewMode] = useState<'text' | 'image'>('text');
   const [zoom, setZoom] = useState(false);
   const [imageMissing, setImageMissing] = useState(false);
+  // 有声书「边听边看」：有音频时控制播放条显隐；没音频时打开绑定抽屉，让用户就地绑定自己的有声书。
+  const [audioOpen, setAudioOpen] = useState(true);
+  const [audioBindOpen, setAudioBindOpen] = useState(false);
   const articleRef = useRef<HTMLElement>(null);
   // 用户绑定的音频优先于内置静态路径；没有绑定且没有内置音频时返回 undefined → 走 TTS 示范。
   const { src: audioSrc } = useBookAudioSrc(book.id, book.audio);
+  // 绑定成功后音频地址就绪：自动收起绑定抽屉、展开播放条，立刻进入边听边看。
+  useEffect(() => {
+    if (audioSrc && audioBindOpen) { setAudioBindOpen(false); setAudioOpen(true); }
+  }, [audioSrc, audioBindOpen]);
   const chapter = book.chapters[chapterIndex];
   const canImage = !!book.pageImages && Object.keys(book.pageImages).length > 0;
   // 页码只用于内置扫描书的图片 / OCR 映射。不假设 chapter.id 一定是 `page-N`，
@@ -281,7 +292,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   if (!chapter) return <div className={`reader-page reader-theme-${settings.theme}`}><div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>无法阅读</span></div></div></div><div className="reader-layout"><article className="reader-article"><div className="empty-page-note"><p>这本书没有可阅读的章节，可能是备份数据损坏或导入不完整。请返回书库删除后重新导入。</p><Button variant="secondary" onClick={onBack}><ArrowLeft size={16} />返回书库</Button></div></article></div></div>;
 
   return <div className={`reader-page reader-theme-${settings.theme}`}>
-    <div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>{chapter.title}</span></div></div><div className="reader-toolbar-center"><span>CHAPTER {String(chapterIndex + 1).padStart(2, '0')}</span><ProgressBar value={Math.round(((chapterIndex + 1) / book.chapters.length) * 100)} /></div><div className="reader-toolbar-actions"><button className={`icon-button ${contentsOpen ? 'active' : ''}`} onClick={() => setContentsOpen(!contentsOpen)} aria-label="目录"><List size={19} /></button>{canImage && <div className="view-toggle" role="group" aria-label="阅读模式"><button className={`icon-button ${viewMode === 'text' ? 'active' : ''}`} onClick={() => switchView('text')} aria-label="文字模式" title="文字模式"><Type size={18} /></button><button className={`icon-button ${viewMode === 'image' ? 'active' : ''}`} onClick={() => switchView('image')} aria-label="图片模式" title="原书图片"><ImageIcon size={18} /></button></div>}<div className="appearance-wrap"><button className={`icon-button ${appearanceOpen ? 'active' : ''}`} onClick={() => setAppearanceOpen(!appearanceOpen)} aria-label="阅读版式"><Settings2 size={19} /></button>{appearanceOpen && <div className="appearance-panel glass-panel"><span className="eyebrow">READING APPEARANCE</span><h3>让正文更适合你</h3><div className="setting-row"><span>字号</span><div className="stepper"><button onClick={() => onSettings({ fontSize: Math.max(16, settings.fontSize - 1) })}><Minus size={15} /></button><strong>{settings.fontSize}</strong><button onClick={() => onSettings({ fontSize: Math.min(26, settings.fontSize + 1) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>行距</span><div className="stepper"><button onClick={() => onSettings({ lineHeight: Math.max(1.5, Number((settings.lineHeight - 0.1).toFixed(1))) })}><Minus size={15} /></button><strong>{settings.lineHeight.toFixed(1)}</strong><button onClick={() => onSettings({ lineHeight: Math.min(2.1, Number((settings.lineHeight + 0.1).toFixed(1))) })}><Plus size={15} /></button></div></div><div className="theme-options">{(['midnight', 'sepia', 'paper'] as const).map((theme) => <button key={theme} className={`${theme} ${settings.theme === theme ? 'active' : ''}`} onClick={() => onSettings({ theme })}><span>Aa</span><small>{theme === 'midnight' ? '暗夜' : theme === 'sepia' ? '羊皮纸' : '白纸'}</small></button>)}</div></div>}</div></div></div>
+    <div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>{chapter.title}</span></div></div><div className="reader-toolbar-center"><span>CHAPTER {String(chapterIndex + 1).padStart(2, '0')}</span><ProgressBar value={Math.round(((chapterIndex + 1) / book.chapters.length) * 100)} /></div><div className="reader-toolbar-actions"><button className={`icon-button ${contentsOpen ? 'active' : ''}`} onClick={() => setContentsOpen(!contentsOpen)} aria-label="目录"><List size={19} /></button>{canImage && <div className="view-toggle" role="group" aria-label="阅读模式"><button className={`icon-button ${viewMode === 'text' ? 'active' : ''}`} onClick={() => switchView('text')} aria-label="文字模式" title="文字模式"><Type size={18} /></button><button className={`icon-button ${viewMode === 'image' ? 'active' : ''}`} onClick={() => switchView('image')} aria-label="图片模式" title="原书图片"><ImageIcon size={18} /></button></div>}<button className={`icon-button ${(audioSrc && audioOpen) || audioBindOpen ? 'active' : ''}`} onClick={() => { if (audioSrc) setAudioOpen(!audioOpen); else setAudioBindOpen(true); }} aria-label="有声书边听边看" title={audioSrc ? (audioOpen ? '隐藏有声书播放条' : '显示有声书播放条') : '绑定有声书，边听边看'}><Headphones size={19} /></button><div className="appearance-wrap"><button className={`icon-button ${appearanceOpen ? 'active' : ''}`} onClick={() => setAppearanceOpen(!appearanceOpen)} aria-label="阅读版式"><Settings2 size={19} /></button>{appearanceOpen && <div className="appearance-panel glass-panel"><span className="eyebrow">READING APPEARANCE</span><h3>让正文更适合你</h3><div className="setting-row"><span>字号</span><div className="stepper"><button onClick={() => onSettings({ fontSize: Math.max(16, settings.fontSize - 1) })}><Minus size={15} /></button><strong>{settings.fontSize}</strong><button onClick={() => onSettings({ fontSize: Math.min(26, settings.fontSize + 1) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>行距</span><div className="stepper"><button onClick={() => onSettings({ lineHeight: Math.max(1.5, Number((settings.lineHeight - 0.1).toFixed(1))) })}><Minus size={15} /></button><strong>{settings.lineHeight.toFixed(1)}</strong><button onClick={() => onSettings({ lineHeight: Math.min(2.1, Number((settings.lineHeight + 0.1).toFixed(1))) })}><Plus size={15} /></button></div></div><div className="theme-options">{(['midnight', 'sepia', 'paper'] as const).map((theme) => <button key={theme} className={`${theme} ${settings.theme === theme ? 'active' : ''}`} onClick={() => onSettings({ theme })}><span>Aa</span><small>{theme === 'midnight' ? '暗夜' : theme === 'sepia' ? '羊皮纸' : '白纸'}</small></button>)}</div></div>}</div></div></div>
     <div className="reader-layout">
       <article className={`reader-article ${viewMode === 'image' && pageImage ? 'reader-article-image' : ''}`} ref={articleRef} style={{ '--reader-size': `${settings.fontSize}px`, '--reader-leading': settings.lineHeight } as React.CSSProperties}>
         <header className="chapter-header"><span className="eyebrow">PAGE {String(pageNumber).padStart(2, '0')}</span><h1>{chapter.title}</h1><p>{book.title} · {book.author}</p><div className="chapter-rule"><span /></div></header>
@@ -305,7 +316,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
       </article>
       <aside className={`reader-aside glass-panel ${contentsOpen ? 'open' : ''}`}><div className="aside-heading"><div><span className="eyebrow">IN THIS BOOK</span><h3>目录</h3></div><button className="icon-button" onClick={() => setContentsOpen(false)}><X size={17} /></button></div><div className="toc-list">{book.chapters.map((item, index) => <button className={index === chapterIndex ? 'active' : ''} key={item.id} onClick={() => goToChapter(index)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item.title}</strong>{index === chapterIndex && <ArrowRight size={15} />}</button>)}</div><div className="aside-note"><BookMarked size={18} /><strong>阅读数据在本机</strong><p>当前书籍、标记与词汇均可离线访问。</p></div></aside>
     </div>
-    {audioSrc && <div className="reader-audio"><AudioBar book={book} src={audioSrc} page={pageNumber} onNotify={onNotify} /></div>}
+    {audioSrc && audioOpen && <div className="reader-audio"><AudioBar book={book} src={audioSrc} page={pageNumber} onNotify={onNotify} /></div>}
     {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button><button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button></div>}
     {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}>
       <section className="lookup-panel glass-panel" aria-label="查词面板">
@@ -328,5 +339,14 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     </div>}
     {noteOpen && selection && <Modal title="给这段原文留条笔记" eyebrow="THINK WITH THE TEXT" onClose={() => setNoteOpen(false)}><blockquote className="note-quote">{selection.text}</blockquote><textarea className="note-input" autoFocus value={note} onChange={(event) => setNote(event.target.value)} placeholder="这句话让你想到了什么？" rows={5} /><div className="modal-actions"><Button variant="ghost" onClick={() => setNoteOpen(false)}>取消</Button><Button onClick={() => saveHighlight(true)} disabled={!note.trim()}>保存笔记</Button></div></Modal>}
     {voiceTarget && <div className="reader-voice-backdrop"><section className="reader-voice-drawer glass-panel"><div className="drawer-heading"><div><span className="eyebrow">LISTEN & CATCH · VOICE LAB</span><h2>跟读对比</h2></div><button className="icon-button" onClick={() => setVoiceTarget('')} aria-label="关闭跟读面板"><X size={20} /></button></div><VoiceRecorder compact targetText={voiceTarget} mode="shadowing" audioUrl={audioSrc} bookId={book.id} onSave={onSaveVoice} /></section></div>}
+    {audioBindOpen && <div className="reader-voice-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAudioBindOpen(false); }}>
+      <section className="reader-voice-drawer glass-panel" aria-label="有声书边听边看">
+        <div className="drawer-heading"><div><span className="eyebrow">AUDIOBOOK · LISTEN WHILE READING</span><h2>有声书 · 边听边看</h2></div><button className="icon-button" onClick={() => setAudioBindOpen(false)} aria-label="关闭有声书面板"><X size={20} /></button></div>
+        <p className="audio-bind-hint">这本书还没有音频。绑定你自己的有声书文件后，阅读页底部会出现播放条：播放 / 变速 / ±15s，还能「锚定本页 + 联动」实现翻到哪页听到哪页。绑定后可在本机生成句级定位。音频只存本机 IndexedDB，不上传、不进备份。</p>
+        <Suspense fallback={<div className="route-loading"><div className="loading-line"><span /></div><p>正在载入…</p></div>}>
+          <AudioBindingPanel books={[book]} onNotify={onNotify} />
+        </Suspense>
+      </section>
+    </div>}
   </div>;
 }

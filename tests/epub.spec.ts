@@ -129,3 +129,45 @@ test('查词面板：只抓含词的那一句（非整段）+ 释义首屏 + 收
   await expect(card.locator('.sentence-meaning')).toContainText('建议，忠告');
   expect(pageErrors).toEqual([]);
 });
+
+// 最小可解析 WAV（8kHz mono 16-bit 静音 0.1s），用于端到端验证「绑定有声书 → 播放条出现」。
+function tinyWav(): Buffer {
+  const data = Buffer.alloc(1600);
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0); header.writeUInt32LE(36 + data.length, 4); header.write('WAVE', 8);
+  header.write('fmt ', 12); header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(8000, 24); header.writeUInt32LE(16000, 28); header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34);
+  header.write('data', 36); header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
+test('有声书边听边看：无音频的书可就地绑定，播放条出现且可显隐', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await importFixture(page);
+
+  // 导入的书没有音频：工具栏「有声书」按钮应打开绑定抽屉，而不是毫无入口。
+  await page.getByRole('button', { name: '有声书边听边看' }).click();
+  const drawer = page.locator('.reader-voice-drawer[aria-label="有声书边听边看"]');
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole('button', { name: /绑定音频/ })).toBeVisible();
+
+  // 就地绑定一个音频文件 → 抽屉自动收起、阅读页出现播放条。
+  // 走真实交互：点「绑定音频」触发 file chooser（同时设置 targetId），再喂文件。
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    drawer.getByRole('button', { name: /绑定音频/ }).click(),
+  ]);
+  await chooser.setFiles({ name: 'sample.wav', mimeType: 'audio/wav', buffer: tinyWav() });
+  await expect(drawer).toBeHidden({ timeout: 10000 });
+  const bar = page.locator('.audiobar');
+  await expect(bar).toBeVisible();
+  await expect(bar.locator('.audiobar-play')).toBeVisible();
+
+  // 工具栏按钮可显隐播放条。
+  await page.getByRole('button', { name: '有声书边听边看' }).click();
+  await expect(bar).toBeHidden();
+  await page.getByRole('button', { name: '有声书边听边看' }).click();
+  await expect(bar).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});

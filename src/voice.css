@@ -250,3 +250,10 @@
 .stt-source { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; background: rgba(7,7,14,.5); color: var(--faint); font-size: 8px; letter-spacing: .04em; }
 .stt-source select { border: 0; outline: 0; background: transparent; color: #a5b4fc; font-family: inherit; font-size: 9px; padding: 1px 0; }
 .stt-source select option { background: #181824; color: var(--text); }
+
+/* 有声书「边听边看」绑定抽屉：复用跟读抽屉外壳，内嵌 AudioBinding 卡片去框化 */
+.audio-bind-hint { margin: 0 0 16px; font-size: 13px; line-height: 1.75; opacity: .8; }
+.reader-voice-drawer .audio-binding-card { background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0; }
+.reader-voice-drawer .audio-binding-card .settings-card-head { margin-bottom: 10px; }
+.reader-voice-drawer .audio-binding-note { font-size: 12px; line-height: 1.65; }
+.reader-voice-drawer .audio-binding-row { padding: 12px 0; }

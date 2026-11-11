@@ -2,7 +2,7 @@
 
 快照目录：/tmp/linguaflow-reader-public
 文件数：78
-总大小：1.05 MB
+总大小：1.06 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
