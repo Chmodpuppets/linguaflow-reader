@@ -151,6 +151,12 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .book-cover strong { display: block; margin-top: 46px; font-family: 'Literata Variable',Georgia,serif; font-size: 18px; line-height: 1.08; }
 .book-cover small { left: 13px; bottom: 14px; font-size: 7px; max-width: 95px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .book-cover i { width: 45px; height: 45px; bottom: 40px; }
+/* 真实封面（从 EPUB 提取）：整幅铺满、悬停微放大，保留书脊高光与底部渐隐以维持质感。 */
+.book-cover-img { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
+.book-card:hover .book-cover-img, .hero-book:hover .book-cover-img { transform: scale(1.05); }
+.has-image { padding: 0; background: #0c0c15; }
+.has-image:before { z-index: 1; background: linear-gradient(90deg,rgba(255,255,255,.12),transparent 9%,transparent 91%,rgba(0,0,0,.22)); }
+.has-image:after { left: 0; right: 0; top: auto; bottom: 0; height: 36%; background: linear-gradient(to top,rgba(4,5,11,.5),transparent); box-shadow: none; z-index: 1; }
 .book-info { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; padding-top: 3px; }
 /* 删除书籍：只对自己导入的 EPUB 显示，做成低调的图标按钮，不与「开始阅读」抢视觉权重。 */
 .book-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

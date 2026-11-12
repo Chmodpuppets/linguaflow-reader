@@ -106,6 +106,54 @@ function extractChapter(html: Document, root?: Element): { heading?: string; par
   return { heading, paragraphs };
 }
 
+/**
+ * 找出封面图片在 zip 内的路径。优先级：
+ * 1. EPUB3 manifest properties~cover-image；
+ * 2. EPUB2 metadata meta[name=cover]@content（manifest id 或直接 href）；
+ * 3. guide reference[type=cover]（一个 XHTML，取其首张 <img>）；
+ * 4. id / href 含 "cover" 的图片资源。
+ */
+function findCoverPath(opf: Document, manifest: Map<string, string>, base: string): string | undefined {
+  const items = Array.from(opf.querySelectorAll('manifest item'));
+  const isImage = (el: Element) => (el.getAttribute('media-type') || '').startsWith('image/');
+  const ep3 = items.find((el) => isImage(el) && (el.getAttribute('properties') || '').split(/\s+/).includes('cover-image'));
+  if (ep3) return resolveHref(base, ep3.getAttribute('href') || '').path;
+  const content = opf.querySelector('metadata > meta[name="cover"]')?.getAttribute('content');
+  if (content) {
+    const byId = manifest.get(content);
+    if (byId) return resolveHref(base, byId).path;
+    if (items.some((el) => isImage(el) && el.getAttribute('href') === content)) return resolveHref(base, content).path;
+  }
+  const guide = opf.querySelector('guide > reference[type="cover"]');
+  if (guide) return resolveHref(base, guide.getAttribute('href') || '').path;
+  const named = items.find((el) => isImage(el) && (/cover/i.test(el.getAttribute('id') || '') || /cover/i.test(el.getAttribute('href') || '')));
+  if (named) return resolveHref(base, named.getAttribute('href') || '').path;
+  return undefined;
+}
+
+/** 把封面位图压缩成有界 data URL（最长边 640、JPEG），避免撑爆 localStorage / 备份。 */
+async function coverDataUrl(blob: Blob): Promise<string | undefined> {
+  if (typeof createImageBitmap === 'undefined' || typeof document === 'undefined') return undefined;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    let url = canvas.toDataURL('image/jpeg', 0.85);
+    if (url.length > 400_000) url = canvas.toDataURL('image/jpeg', 0.7);
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
 interface TocEntry { title: string; href: string }
 
 /** 读取 EPUB3 nav 或 EPUB2 NCX 目录，返回有序 {title, href}；没有则 null。 */
@@ -186,6 +234,25 @@ export async function importEpub(file: File, onProgress?: (progress: ImportProgr
     return html;
   };
 
+  // 提取真实封面（压缩为有界 data URL），让书库一眼可辨；失败则回退生成封面。
+  let coverImage: string | undefined;
+  const coverPath = findCoverPath(opf, manifest, base);
+  if (coverPath) {
+    const coverFile = zip.file(coverPath);
+    if (coverFile) {
+      if (/\.(xhtml|html|htm)$/i.test(coverPath)) {
+        const coverDoc = await loadHtml(coverPath);
+        const imgSrc = coverDoc?.querySelector('img')?.getAttribute('src');
+        if (imgSrc) {
+          const imgFile = zip.file(resolveHref(dirOf(coverPath), imgSrc).path);
+          if (imgFile) coverImage = await coverDataUrl(await imgFile.async('blob'));
+        }
+      } else {
+        coverImage = await coverDataUrl(await coverFile.async('blob'));
+      }
+    }
+  }
+
   const chapters: Chapter[] = [];
   // 优先按书自带的目录（nav / NCX）建章节：标题与顺序以目录为准，
   // 避免把 spine 里的扉页 / 目录页 / 版权页当成「Chapter N」导致章节错位。
@@ -231,6 +298,7 @@ export async function importEpub(file: File, onProgress?: (progress: ImportProgr
     description: `${chapters.length} chapters · Imported from EPUB`,
     cover: title.split(/\s+/).slice(0, 2).join(' ').toUpperCase(),
     accent: pickAccent(title),
+    coverImage,
     chapters,
     progress: 0,
     currentChapter: 0,

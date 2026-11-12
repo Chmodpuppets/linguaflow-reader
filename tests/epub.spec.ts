@@ -204,3 +204,46 @@ test('div / br 分段的 EPUB 保留自然段，不拼成一坨', async ({ page 
   // 段落边界不粘连：第一段不含第二段文字。
   await expect(paragraphs.nth(0)).not.toContainText('second paragraph');
 });
+
+// 1x1 PNG，用于封面提取回归（createImageBitmap 可解码）。
+const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+async function buildCoverEpub(mode: 'epub2' | 'epub3'): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file('META-INF/container.xml', `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`);
+  const coverMeta = mode === 'epub2' ? '<meta name="cover" content="coverimg"/>' : '';
+  const coverProps = mode === 'epub3' ? ' properties="cover-image"' : '';
+  zip.file('OEBPS/content.opf', `<?xml version="1.0"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="${mode === 'epub3' ? '3.0' : '2.0'}" unique-identifier="uid">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Covered Book</dc:title><dc:creator>Author</dc:creator><dc:identifier id="uid">urn:uuid:cover</dc:identifier><dc:language>en</dc:language>${coverMeta}</metadata>
+<manifest>
+<item id="coverimg" href="cover.png" media-type="image/png"${coverProps}/>
+<item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+</manifest>
+<spine><itemref idref="ch1"/></spine>
+</package>`);
+  zip.file('OEBPS/cover.png', TINY_PNG);
+  zip.file('OEBPS/ch1.xhtml', `<?xml version="1.0"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter One</title></head><body><h1>Chapter One</h1><p>The covered book opens with a single clear paragraph.</p></body></html>`);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+for (const mode of ['epub2', 'epub3'] as const) {
+  test(`提取 EPUB 真实封面（${mode}）：书库展示封面图而非生成封面`, async ({ page }) => {
+    const buffer = await buildCoverEpub(mode);
+    await page.goto('/');
+    await page.getByRole('button', { name: '导入 EPUB' }).click();
+    await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'covered.epub', mimeType: 'application/epub+zip', buffer });
+    await expect(page.locator('.reader-page')).toBeVisible();
+    // 回到书库查看封面。
+    await page.getByRole('button', { name: '返回书库' }).click();
+    const card = page.locator('.book-card', { hasText: 'Covered Book' });
+    const cover = card.locator('.book-cover.has-image img.book-cover-img');
+    await expect(cover).toBeVisible();
+    const src = await cover.getAttribute('src');
+    expect(src?.startsWith('data:image/')).toBe(true);
+    // 有真实封面时该书不再渲染生成封面的文字块（样书仍用生成封面）。
+    await expect(card.locator('.book-cover strong')).toHaveCount(0);
+  });
+}

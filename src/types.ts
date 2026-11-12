@@ -27,6 +27,8 @@ export interface Book {
   pageBlocks?: Record<number, { x: number; y: number; w: number; h: number; text: string }[]>;
   /** 有声书音频路径。存在即可在阅读页显示音频条。 */
   audio?: string;
+  /** 从 EPUB 提取并压缩后的真实封面（data URL）。存在时书库优先展示它而非生成封面。 */
+  coverImage?: string;
 }
 
 export interface DictionaryEntry {
