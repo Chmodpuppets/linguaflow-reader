@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, Ch
 import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord } from '../types';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
+import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
 import { useBookAudioSrc } from '../lib/bookAudio';
 import { Button, Modal, ProgressBar } from './UI';
@@ -129,6 +130,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     setShowFullParagraph(false);
     if (!lookup) { setRemote(null); setRemoteLoading(false); return; }
     const word = lookup.word;
+    recordEvent({ type: 'lookup', word, bookId: book.id });
     if (lookupWord(word)) { setRemote(null); setRemoteLoading(false); return; }
     let active = true;
     setRemoteLoading(true);

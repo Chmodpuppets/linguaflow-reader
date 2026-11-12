@@ -10,6 +10,7 @@ import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
+import { recordEvent, startLearningSync } from './lib/learning';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
@@ -83,6 +84,9 @@ export default function App() {
   const activeBook = data.books.find((book) => book.id === activeBookId) || null;
   const savedWords = useMemo(() => data.vocabulary.map((entry) => entry.word), [data.vocabulary]);
   const dueCount = data.vocabulary.filter((entry) => new Date(entry.dueAt).getTime() <= Date.now()).length;
+
+  // 学习记录上云（opt-in）：联网恢复 / 周期补传离线队列。未开启同步时不做任何事。
+  useEffect(() => { startLearningSync(); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,7 +184,10 @@ export default function App() {
   };
   const addVocab = (entry: NewVocab) => setData((current) => ({ ...current, vocabulary: [{ ...entry, id: makeId('vocab'), createdAt: new Date().toISOString(), familiarity: 0, dueAt: new Date().toISOString(), reviewCount: 0 }, ...current.vocabulary] }));
   const addHighlight = (highlight: NewHighlight) => setData((current) => ({ ...current, highlights: [{ ...highlight, id: makeId('mark'), createdAt: new Date().toISOString() }, ...current.highlights] }));
-  const addSentence = (sentence: NewSentence) => setData((current) => ({ ...current, sentences: [{ ...sentence, id: makeId('sentence'), createdAt: new Date().toISOString() }, ...(current.sentences || [])] }));
+  const addSentence = (sentence: NewSentence) => {
+    recordEvent({ type: 'save_sentence', word: sentence.word, bookId: sentence.bookId, payload: { text: sentence.text, meaning: sentence.meaning, chapterTitle: sentence.chapterTitle } });
+    setData((current) => ({ ...current, sentences: [{ ...sentence, id: makeId('sentence'), createdAt: new Date().toISOString() }, ...(current.sentences || [])] }));
+  };
   const deleteSentence = async (id: string) => {
     const ok = await askConfirm({ title: '删除收藏句子', message: '确定从句子收藏里移除这句话吗？', confirmLabel: '删除', danger: true });
     if (ok) setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
@@ -222,6 +229,7 @@ export default function App() {
     try {
       await saveVoiceAudio(record.id, audio);
       setData((current) => ({ ...current, voiceRecords: [record, ...current.voiceRecords.filter((item) => item.id !== record.id)] }));
+      recordEvent({ type: 'shadow', bookId: record.bookId, payload: { accuracy: record.metrics.accuracy, wpm: record.metrics.wpm, wordCount: record.metrics.wordCount, duration: record.metrics.duration } });
       return true;
     } catch {
       notify('录音文件保存失败，本次练习未计入统计，请检查浏览器存储空间', 'error');
@@ -233,6 +241,7 @@ export default function App() {
     vocabulary: current.vocabulary.map((entry) => entry.word.toLowerCase() === word.toLowerCase() ? { ...entry, spokenCount: (entry.spokenCount || 0) + 1, lastSpokenAt: new Date().toISOString() } : entry),
   }));
   const addReview = (entry: VocabEntry, result: ReviewLog['result'], mode: ReviewLog['mode']) => {
+    recordEvent({ type: 'review', word: entry.word, bookId: entry.bookId, payload: { result, mode } });
     const increments = { again: 0, hard: 1, good: 2, easy: 3 };
     const days = { again: 0, hard: 1, good: 3, easy: 7 };
     setData((current) => ({
