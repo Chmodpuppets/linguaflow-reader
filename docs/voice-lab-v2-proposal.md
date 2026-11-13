@@ -103,7 +103,9 @@ YOURS   "the world is not FINISHED being interesting"
 
 ### Tier 2 · 反馈设计优化（不改模型，改「怎么给反馈」）
 
-> **实现状态（2026-11-13）**：③ 焦点式纠错已上线。`src/lib/focus.ts` `pickFocus` 按「漏读→重音弱→拖长→停顿→口头禅→替换」优先级选出本轮唯一焦点；VoiceRecorder 渲染焦点卡 +「下一轮只练这个」→ 目标文本高亮焦点词 + 下一轮提醒条。④ 自我监控仍待后续。
+> **实现状态（2026-11-13）**：③ 焦点式纠错 + ④ 自我监控已上线（Tier 2 完成）。
+> ③ `src/lib/focus.ts` `pickFocus` 按「漏读→重音弱→拖长→停顿→口头禅→替换」优先级选出本轮唯一焦点；VoiceRecorder 渲染焦点卡 +「下一轮只练这个」→ 目标文本高亮焦点词 + 下一轮提醒条。
+> ④ 录音后先弹「你觉得自己哪里没跟上？」自评（`SELF_OPTIONS`），再展开 diff/韵律/可懂度/焦点；`selfCompareText` 对比自评与系统焦点的一致性。可「跳过自评」。
 
 #### ③ 焦点式纠错 · one thing at a time ｜ 优先级 P1
 

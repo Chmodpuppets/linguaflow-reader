@@ -54,3 +54,20 @@ export function pickFocus(input: FocusInput): FocusPoint | null {
 
   return null;
 }
+
+// ④ 自我监控：先自评再展开对比。自评选项 → 系统焦点 kind 的映射，用于「自评 vs 系统」一致性提示。
+export const SELF_OPTIONS: { key: string; label: string; kinds: FocusKind[] }[] = [
+  { key: 'missing', label: '漏了词', kinds: ['missing', 'substitute'] },
+  { key: 'rhythm', label: '重音/节奏不对', kinds: ['weak', 'long'] },
+  { key: 'pause', label: '停顿太多', kinds: ['pause'] },
+  { key: 'filler', label: '口头禅多', kinds: ['filler'] },
+  { key: 'smooth', label: '挺顺的', kinds: [] },
+];
+
+export function selfCompareText(selfKey: string, focus: FocusPoint | null): string {
+  const opt = SELF_OPTIONS.find((o) => o.key === selfKey);
+  if (!opt) return '';
+  if (opt.key === 'smooth') return focus ? `你自评「挺顺的」，但系统发现：${focus.title}。看看下面指出的点。` : '你自评「挺顺的」，系统也没发现明显问题。保持！';
+  const match = focus !== null && opt.kinds.includes(focus.kind);
+  return `你的自评：${opt.label} ｜ 系统焦点：${focus ? focus.title : '无明显问题'}${match ? '（一致 👍）' : '（不一致，对照下面的诊断看看）'}`;
+}

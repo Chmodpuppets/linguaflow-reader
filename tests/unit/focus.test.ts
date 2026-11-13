@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickFocus } from '../../src/lib/focus';
+import { pickFocus, selfCompareText } from '../../src/lib/focus';
 import type { DiffToken } from '../../src/types';
 import type { ProsodyWord } from '../../src/lib/prosody';
 
@@ -43,4 +43,27 @@ test('pickFocus：替换兜底', () => {
 test('pickFocus：全匹配且无问题→null', () => {
   const f = pickFocus({ tokens: [tok('the', 'match')], prosody: [pw('the', 'match')], pauseRatioPct: 5, fillerCount: 0 });
   assert.equal(f, null);
+});
+
+test('selfCompareText：自评与系统一致', () => {
+  const f = pickFocus({ tokens: [tok('world', 'missing')] });
+  assert.match(selfCompareText('missing', f), /一致/);
+});
+
+test('selfCompareText：自评与系统不一致', () => {
+  const f = pickFocus({ tokens: [tok('world', 'missing')] });
+  assert.match(selfCompareText('pause', f), /不一致/);
+});
+
+test('selfCompareText：自评挺顺但系统有问题', () => {
+  const f = pickFocus({ tokens: [tok('world', 'missing')] });
+  assert.match(selfCompareText('smooth', f), /但系统发现/);
+});
+
+test('selfCompareText：自评挺顺且系统无问题', () => {
+  assert.match(selfCompareText('smooth', null), /保持/);
+});
+
+test('selfCompareText：未知选项→空串', () => {
+  assert.equal(selfCompareText('nope', null), '');
 });

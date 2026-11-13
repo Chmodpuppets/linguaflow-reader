@@ -7,7 +7,7 @@ import { diffTranscript, formatDuration, speechRecognitionFactory, voiceMetrics,
 import { DEFAULT_WHISPER_MODEL, WHISPER_MODELS, WHISPER_SOURCE_LABEL, isWhisperLoaded, isWhisperSupported, setWhisperSource, transcribeWithWhisper, warmupWhisper, whisperSource, type WhisperModelId, type WhisperProgress, type WhisperSource } from '../lib/whisper';
 import { makeId } from '../lib/utils';
 import { classifyProsody, intelligibilityGaps, wordFeaturesFromBuffer, type ProsodyWord } from '../lib/prosody';
-import { pickFocus, type FocusPoint } from '../lib/focus';
+import { pickFocus, selfCompareText, SELF_OPTIONS, type FocusPoint } from '../lib/focus';
 import { Button } from './UI';
 
 type SttEngine = 'native' | 'whisper';
@@ -267,8 +267,11 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
   const [whisper, setWhisper] = useState<WhisperProgress | null>(null);
   const [prosody, setProsody] = useState<ProsodyWord[] | null>(null);
   const [nextFocus, setNextFocus] = useState<FocusPoint | null>(null);
+  const [selfReport, setSelfReport] = useState<string | null>(null);
+  const [selfSkipped, setSelfSkipped] = useState(false);
   const focus = useMemo(() => result ? pickFocus({ tokens: result.diffTokens, prosody, pauseRatioPct: result.metrics.pauseRatio, fillerCount: result.metrics.fillerCount }) : null, [result, prosody]);
-  useEffect(() => { setNextFocus(null); }, [result]);
+  useEffect(() => { setNextFocus(null); setSelfReport(null); setSelfSkipped(false); }, [result]);
+  const showDiag = selfReport !== null || selfSkipped;
   const engineRef = useRef<SttEngine>(engine);
   const modelRef = useRef<WhisperModelId>(model);
 
@@ -669,10 +672,14 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
     </div>
     {result && <div className="voice-result page-enter">
       <div className="metric-grid"><div><span>有效语速</span><strong>{result.metrics.wpm}<small>WPM</small></strong></div><div><span>卡顿占比</span><strong>{result.metrics.pauseRatio}<small>%</small></strong></div><div><span>{mode === 'freetalk' ? '开口词数' : '词级匹配'}</span><strong>{mode === 'freetalk' ? result.metrics.wordCount : result.metrics.accuracy}<small>{mode === 'freetalk' ? '词' : '%'}</small></strong></div><div><span>口头禅</span><strong>{result.metrics.fillerCount}<small>次</small></strong></div></div>
+      {!showDiag && <div className="self-monitor"><span className="eyebrow">SELF-MONITOR · 先自评</span><strong>你觉得自己哪里没跟上？</strong><p>先凭感觉选一个，再展开系统对比——自我监控是发音习得的关键闭环。</p><div className="self-options">{SELF_OPTIONS.map((o) => <button key={o.key} className="chip" onClick={() => setSelfReport(o.key)}>{o.label}</button>)}</div><button className="self-skip" onClick={() => setSelfSkipped(true)}>跳过自评，直接看对比</button></div>}
+      {showDiag && selfReport && <div className="self-compare">{selfCompareText(selfReport, focus)}</div>}
+      {showDiag && <>
       {focus && <div className="focus-card"><span className="eyebrow">ONE THING AT A TIME</span><strong>{focus.title}</strong><p>{focus.advice}</p><div className="panel-actions"><Button size="sm" onClick={() => setNextFocus(focus)}>下一轮只练这个</Button>{focus.word && <Button size="sm" variant="secondary" onClick={() => speakWords(focus.word!)}><Volume2 size={15} />听这个词</Button>}</div></div>}
       {result.diffTokens.length > 0 && <div className="diff-panel"><div className="diff-legend"><span><i className="green" />匹配</span><span><i className="yellow" />低置信度</span><span><i className="red" />漏读 / 替换</span></div><div className="diff-tokens">{result.diffTokens.map((token, index) => <button key={`${token.text}-${index}`} className={`diff-${token.status}`} title={token.spoken ? `识别为：${token.spoken}` : '这个词没有被识别到'} onClick={() => { if (!('speechSynthesis' in window)) return; const utterance = new SpeechSynthesisUtterance(token.text); utterance.lang = 'en-US'; window.speechSynthesis.speak(utterance); }}>{token.text}</button>)}</div><p>点击词可听标准音。词级 Diff 来自 STT 对齐，不等同于音素评分。</p></div>}
       {gaps.length > 0 && <div className="intelligibility-panel"><div className="panel-head"><span className="eyebrow">INTELLIGIBILITY</span><strong>有 {gaps.length} 个词可能没被听懂</strong></div><ul className="intelligibility-list">{gaps.map((gap, index) => <li key={`${gap.word}-${index}`}><button className="gap-word" onClick={() => speakWords(gap.word)} title="听标准音">{gap.word}</button><span className="gap-note">{gap.kind === 'substitute' ? `识别成了 “${gap.spoken}”` : '未识别到'}</span></li>)}</ul><div className="panel-actions"><Button size="sm" variant="secondary" onClick={() => speakWords(gaps.map((g) => g.word).join(', '))}><Volume2 size={15} />听标准音</Button><span className="panel-hint">重录时重点读这些词。这是「机器可能没听清」，不是「你读错了」。</span></div></div>}
       {prosody && prosody.length > 0 && <div className="prosody-panel"><div className="panel-head"><span className="eyebrow">PROSODY · 节奏对比</span><strong>重音与拖长</strong></div><div className="prosody-row"><span className="prosody-label">TARGET</span><div className="prosody-words">{prosody.map((p, i) => <span key={`t-${p.word}-${i}`} className="prosody-word target">{p.word}</span>)}</div></div><div className="prosody-row"><span className="prosody-label">YOURS</span><div className="prosody-words">{prosody.map((p, i) => <span key={`u-${p.word}-${i}`} className={`prosody-word ${p.status}`} title={p.status === 'weak' ? '该重读却弱读' : p.status === 'long' ? '该弱读却拖长' : '节奏匹配'}>{p.word}</span>)}</div></div><div className="diff-legend"><span><i className="green" />节奏匹配</span><span><i className="yellow" />弱读拖长</span><span><i className="red" />重音缺失</span></div><p>节奏相似度，不等同于发音正确度。</p></div>}
+      </>}
       {result.transcript && <div className="final-transcript"><span>YOUR TRANSCRIPT</span><p>{result.transcript}</p></div>}
       {!result.transcript && <div className="manual-transcript"><label>录音已完成。补入你实际说出的内容，再生成诊断：</label><textarea value={manualTranscript} onChange={(event) => setManualTranscript(event.target.value)} rows={3} placeholder="Type what you actually said…" /><Button disabled={!manualTranscript.trim() || saving} onClick={() => void saveManual()}>{saving ? '正在保存…' : '保存转写与诊断'}</Button></div>}
       {audioUrlResult && <audio className="result-audio" src={audioUrlResult} controls />}
