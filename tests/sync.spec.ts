@@ -92,3 +92,27 @@ test('书库难度匹配：连接后按已知词显示覆盖率徽章', async ({
   await expect(page.locator('.book-grid, .empty-state').first()).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
+
+// P2 降级：pathmora 计划不可达时，用已部署的 linguaflow 学习记录生成本地计划（横幅标「本地计划」）。
+test('pathmora 不可达时复习页回退本地计划（学习记录排程）', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
+  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
+  await page.route('**/api/reader/plan', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ ok: false }) }));
+  await page.route('**/api/learn/summary', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ knownWords: ['attention', 'subtle'], weakWords: [{ word: 'subtle', misses: 2 }], savedSentences: 0 }) }));
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /阅读设置/ }).click();
+  await page.getByRole('switch', { name: '同步学习记录' }).click();
+  await page.locator('.sync-field input').first().fill('e2e@example.com');
+  await page.locator('.sync-field input[type="password"]').fill('pass123');
+  await page.getByRole('button', { name: '连接账号' }).click();
+  await expect(page.getByText('账号已连接')).toBeVisible();
+
+  await page.getByRole('button', { name: /主动复习/ }).click();
+  await expect(page.locator('.plan-banner')).toBeVisible();
+  await expect(page.locator('.plan-banner')).toContainText('本地计划');
+  await expect(page.locator('.plan-banner')).toContainText('1 个薄弱词');
+  expect(pageErrors).toEqual([]);
+});

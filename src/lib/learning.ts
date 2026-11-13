@@ -103,6 +103,7 @@ export interface ReaderPlan {
   readingRewardMinutes: number;
   due: ReaderPlanTask[];
   stats: { knownCount: number; weakCount: number; savedSentences: number };
+  source?: 'pathmora' | 'fallback';
 }
 
 /** 拉取 pathmora 下发的今日复习计划。未开启 / 无 token / 不可达时返回 null（回退本地 SRS）。 */
@@ -116,7 +117,41 @@ export async function fetchReaderPlan(): Promise<ReaderPlan | null> {
     });
     if (!res.ok) return null;
     const plan = (await res.json()) as ReaderPlan;
-    return plan && Array.isArray(plan.due) ? plan : null;
+    return plan && Array.isArray(plan.due) ? { ...plan, source: 'pathmora' } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** pathmora 不可达时的本地降级计划：用已部署的 linguaflow /learn/summary（薄弱词优先+已知词强化）。
+ *  明确标记 source:'fallback'，pathmora 连接后自动升级为大脑下发。复习调度权威仍归 pathmora。 */
+export async function fetchFallbackPlan(): Promise<ReaderPlan | null> {
+  const token = getSyncToken();
+  if (!isSyncEnabled() || !token) return null;
+  try {
+    const res = await fetch(`${getDictionaryBase()}/learn/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const weakRaw: unknown[] = Array.isArray(body?.weakWords) ? body.weakWords : [];
+    const weak = weakRaw
+      .map((w) => typeof w === 'string' ? { word: w, misses: 1 } : { word: (w as { word?: string })?.word, misses: Number((w as { misses?: number; count?: number })?.misses ?? (w as { count?: number })?.count ?? 1) })
+      .filter((w): w is { word: string; misses: number } => typeof w.word === 'string' && !!w.word);
+    weak.sort((a, b) => b.misses - a.misses);
+    const knownRaw: unknown[] = Array.isArray(body?.knownWords) ? body.knownWords : [];
+    const known = knownRaw.map((w) => typeof w === 'string' ? w : (w as { word?: string })?.word).filter((w): w is string => typeof w === 'string');
+    const due: ReaderPlanTask[] = [
+      ...weak.map((w) => ({ word: w.word, misses: w.misses, kind: 'weak' as const })),
+      ...known.filter((w) => !weak.some((x) => x.word === w)).map((w) => ({ word: w, misses: 0, kind: 'reinforce' as const })),
+    ].slice(0, 12);
+    if (!due.length) return null;
+    return {
+      ok: true, generatedAt: Date.now(), todayMinutes: 10, readingRewardMinutes: 15, due,
+      stats: { knownCount: known.length, weakCount: weak.length, savedSentences: Number(body?.savedSentences) || 0 },
+      source: 'fallback',
+    };
   } catch {
     return null;
   }

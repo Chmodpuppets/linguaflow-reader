@@ -82,3 +82,20 @@ test('connectAccount(pathmora) 成功后保存 token（统一身份以 pathmora 
   assert.equal(r.ok, true);
   assert.equal(getSyncToken(), 'pm-token');
 });
+
+test('fetchFallbackPlan 用学习记录本地排程（薄弱词优先），标记 fallback', async () => {
+  setSyncEnabled(true);
+  setSyncToken('tok');
+  online = true;
+  fetchOk = true;
+  fetchBody = { knownWords: ['alpha', 'beta'], weakWords: [{ word: 'alpha', misses: 3 }], savedSentences: 2 };
+  const { fetchFallbackPlan } = await import('../../src/lib/learning');
+  const plan = await fetchFallbackPlan();
+  assert.ok(plan);
+  assert.equal(plan.source, 'fallback');
+  assert.equal(plan.due[0].word, 'alpha');
+  assert.equal(plan.due[0].kind, 'weak');
+  assert.equal(plan.due[1].word, 'beta');
+  assert.equal(plan.due[1].kind, 'reinforce');
+  assert.equal(plan.stats.weakCount, 1);
+});
