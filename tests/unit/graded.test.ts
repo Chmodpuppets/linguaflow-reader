@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { gradedBooks, gradedGlosses } from '../../src/data/gradedReaders';
 import { chapterWords, chapterStats } from '../../src/lib/annotation';
 
-test('分级书架：三档 CEFR、正文非空、source=sample', () => {
-  assert.deepEqual(gradedBooks.map((b) => b.level), ['A1', 'A2', 'B1']);
+test('分级书架：三档 CEFR 各两本、正文非空、source=sample', () => {
+  assert.equal(gradedBooks.length, 6);
+  for (const level of ['A1', 'A2', 'B1']) {
+    assert.equal(gradedBooks.filter((b) => b.level === level).length, 2, level);
+  }
   for (const b of gradedBooks) {
     assert.equal(b.source, 'sample');
     assert.ok(b.chapters[0].paragraphs.length >= 4, b.id);
