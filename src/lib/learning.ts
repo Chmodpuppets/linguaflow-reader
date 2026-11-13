@@ -116,6 +116,38 @@ export async function fetchReaderPlan(): Promise<ReaderPlan | null> {
   }
 }
 
+// P3：已知词来自 pathmora 积累（linguaflow /learn/summary 的 knownWords），供难度匹配。
+// 缓存于本机（10 分钟 TTL），未连接 / 不可达时返回缓存或空，reader 回退本地已知词。
+const KNOWN_KEY = 'lf_known_words';
+const KNOWN_AT_KEY = 'lf_known_words_at';
+const KNOWN_TTL = 10 * 60_000;
+
+export const getCachedKnownWords = (): string[] => {
+  try { const parsed = JSON.parse(read(KNOWN_KEY) || '[]'); return Array.isArray(parsed) ? parsed.filter((w): w is string => typeof w === 'string') : []; } catch { return []; }
+};
+export const knownWordsStale = (): boolean => Date.now() - Number(read(KNOWN_AT_KEY) || 0) > KNOWN_TTL;
+
+/** 拉取并缓存已知词。未开启 / 无 token / 不可达返回 null（调用方用缓存或本地回退）。 */
+export async function refreshKnownWords(): Promise<string[] | null> {
+  const token = getSyncToken();
+  if (!isSyncEnabled() || !token) return null;
+  try {
+    const res = await fetch(`${getDictionaryBase()}/learn/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const raw = Array.isArray(body?.knownWords) ? body.knownWords : [];
+    const words = raw.map((w: unknown) => typeof w === 'string' ? w : (w as { word?: string })?.word).filter((w: unknown): w is string => typeof w === 'string');
+    write(KNOWN_KEY, JSON.stringify(words));
+    write(KNOWN_AT_KEY, String(Date.now()));
+    return words;
+  } catch {
+    return null;
+  }
+}
+
 /** 启动后台补传：联网恢复 + 周期性 flush。App 挂载时调用一次。 */
 export function startLearningSync() {
   if (typeof window === 'undefined') return;

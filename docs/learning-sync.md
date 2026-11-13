@@ -1,4 +1,4 @@
-# 学习记录同步（P1 opt-in · P2 计划下发）
+# 学习记录同步（P1 opt-in · P2 计划下发 · P3 难度匹配）
 
 > 三产品学习闭环的地基。reader 是「学习现场」，只负责捕获与练习；**复习调度与学习计划归 pathmora**；linguaflow 提供账号 + 词典 + 同步底座。
 
@@ -54,6 +54,14 @@ pathmora 据此做复习调度与「今日十分钟」计划（P2），以及覆
 - **reader 执行** `src/lib/learning.ts` `fetchReaderPlan()`（base 默认 `https://www.pathmora.cn/api`，可用 `pathmora_plan_base` 覆盖；仅开启+有 token 才请求，6s 超时）。`src/components/Review.tsx` 挂载拉取，`start()` 按 `plan.due` 词序映射本地词条；**计划不可达自动回退本地 SRS**，阅读/复习不被阻塞。setup 页 `.plan-banner` 展示「今日10分钟 + 薄弱词数 + 阅读奖励15分钟」。
 - **部署边界**：pathmora 大脑代码已本地提交（未自动部署，遵循其 DEPLOYMENT.md）；reader 执行端带优雅回退照常上线。pathmora 部署后计划即生效，无需 reader 再改。
 
+## P3 · 覆盖率难度匹配（选书 + 难度标签）
+
+- **纯函数** `src/lib/difficulty.ts`：`bookWordFreq`（内容词词频，去功能词/纯数字/单字符）、`coveragePercent`（词频加权：已知词词次 / 全书词次）、`difficultyBand`（≥98 轻松 / 90–98 适中·i+1 / 75–89 进阶 / <75 挑战）、`bookDifficulty`（带词频缓存；已知词为空返回 null 不评估）。
+- **已知词来源**：`learning.ts` `refreshKnownWords()` 拉 `{base}/learn/summary` 的 `knownWords`（pathmora 积累），本机缓存 10 分钟 TTL；未连接 / 不可达回退**本地**已掌握词（复习 good/easy ∪ familiarity≥3）。App 合并两者传 Library。
+- **展示**：书库卡片与「继续阅读」hero 显示 `difficulty-badge`（分档 + 覆盖率%）；落在 i+1 区间额外显示「匹配你的水平」chip。已知词为空时不渲染徽章（不误导）。
+- **离线优先**：覆盖率在本机计算，不上传书籍内容；已知词仅拉取词表。
+
 ## 后续
 
-- P3：覆盖率（书词 ∩ 已知词 / 书词，词频加权）90–98% 判 i+1 选书 + reader 难度标签。
+- 账号统一：收敛三产品 token 键（pathmora `auth_token` / reader `lf_sync_token`），单点登录。
+- 选书推荐：把覆盖率排序 / 「为你推荐 i+1」筛选接入书库（当前为标签展示）。

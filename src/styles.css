@@ -750,3 +750,11 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .plan-banner { margin: 14px 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent, #8b5cf6) 40%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--accent, #8b5cf6) 10%, transparent); text-align: left; }
 .plan-banner .eyebrow { color: var(--accent, #8b5cf6); }
 .plan-banner p { margin: 6px 0 0; font-size: 13px; line-height: 1.6; color: var(--text-dim, #b6b3c7); }
+
+/* P3：难度匹配徽章（覆盖率 + 分档）与「匹配你的水平」提示 */
+.difficulty-badge { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 2px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .02em; border: 1px solid transparent; width: fit-content; }
+.difficulty-badge.band-easy { color: #7dd3a8; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.difficulty-badge.band-ideal { color: #a78bfa; background: rgba(139, 92, 246, .16); border-color: rgba(139, 92, 246, .5); }
+.difficulty-badge.band-stretch { color: #fbbf24; background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .35); }
+.difficulty-badge.band-hard { color: #f87171; background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .35); }
+.match-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #a78bfa; background: rgba(139, 92, 246, .16); border: 1px solid rgba(139, 92, 246, .5); }
