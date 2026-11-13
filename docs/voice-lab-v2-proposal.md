@@ -131,6 +131,8 @@ YOURS   "the world is not FINISHED being interesting"
 
 ### Tier 3 · 机制升级（把一次性练习变成会重复的系统）
 
+> **实现状态（2026-11-14）**：⑤ 间隔重录已上线。`src/lib/spacedShadowing.ts`（`groupShadowings`/`dueShadowings`/`nextIntervalDays`）按 targetText 分组、1/3/7 天到期；VoiceLab 侧栏「间隔重录」卡列出到期句（练 N 次 / 准确率首→末 / ΔWPM）+「重录这句」切到跟读并载入该句。⑥ 复杂度仍待后续。
+
 #### ⑤ 间隔重录 · spaced shadowing ｜ 优先级 P2
 
 - **科学依据**：分散练习 + 检索，隔天重录比当场重复更牢。
