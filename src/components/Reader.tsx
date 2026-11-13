@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
-import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord } from '../types';
+import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord, WordGloss, WordState } from '../types';
+import { chapterStats, rubyGlossFor, type AnnotationMode } from '../lib/annotation';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
 import { recordEvent } from '../lib/learning';
@@ -18,8 +19,12 @@ type NewVocab = Omit<VocabEntry, 'id' | 'createdAt' | 'familiarity' | 'dueAt' | 
 type NewHighlight = Omit<Highlight, 'id' | 'createdAt'>;
 type NewSentence = Omit<SavedSentence, 'id' | 'createdAt'>;
 
-function WordText({ text }: { text: string }) {
-  return <>{text.split(/(\b[a-zA-Z][a-zA-Z'-]*\b)/g).map((part, index) => /^[a-zA-Z]/.test(part) ? <span className="word" data-word={part} key={`${part}-${index}`}>{part}</span> : part)}</>;
+function WordText({ text, ruby }: { text: string; ruby?: (word: string) => string | null }) {
+  return <>{text.split(/(\b[a-zA-Z][a-zA-Z'-]*\b)/g).map((part, index) => {
+    if (!/^[a-zA-Z]/.test(part)) return part;
+    const gloss = ruby?.(part.toLowerCase()) || null;
+    return <span className={`word${gloss ? ' word-annotated' : ''}`} data-word={part} key={`${part}-${index}`}>{gloss ? <ruby>{part}<rt>{gloss}</rt></ruby> : part}</span>;
+  })}</>;
 }
 
 type OcrBlock = { x: number; y: number; w: number; h: number; text: string };
@@ -46,35 +51,38 @@ function OcrLayer({ blocks, onWord, onSelect }: { blocks: OcrBlock[]; onWord: (w
   return <div className="ocr-layer" onMouseUp={onSelect} onTouchEnd={onSelect}>{nodes.map((node, index) => <span key={index} className="ocr-word" style={{ left: `${node.left}%`, top: `${node.top}%`, width: `${node.width}%`, height: `${node.height}%` }} onClick={(event) => { event.stopPropagation(); onWord(node.word); }}>{node.word + ' '}</span>)}</div>;
 }
 
-function RichParagraph({ text, marks }: { text: string; marks: Highlight[] }) {
+function RichParagraph({ text, marks, ruby }: { text: string; marks: Highlight[]; ruby?: (word: string) => string | null }) {
   // 优先用划选时记录的偏移：同一段里出现重复文本时，indexOf 永远命中第一处，
   // 会把高亮画在用户没选过的位置。旧数据没有 offset 时回退 indexOf。
   const ranges = marks.map((mark) => ({ mark, start: typeof mark.offset === 'number' && mark.offset >= 0 && text.startsWith(mark.text, mark.offset) ? mark.offset : text.indexOf(mark.text) })).filter((item) => item.start >= 0).sort((a, b) => a.start - b.start);
-  if (!ranges.length) return <WordText text={text} />;
+  if (!ranges.length) return <WordText text={text} ruby={ruby} />;
   const parts: React.ReactNode[] = [];
   let cursor = 0;
   ranges.forEach(({ mark, start }, index) => {
     if (start < cursor) return;
-    if (start > cursor) parts.push(<WordText key={`text-${index}`} text={text.slice(cursor, start)} />);
+    if (start > cursor) parts.push(<WordText key={`text-${index}`} text={text.slice(cursor, start)} ruby={ruby} />);
     parts.push(<mark className={`highlight-${mark.color}`} key={mark.id}>{mark.text}</mark>);
     cursor = start + mark.text.length;
   });
-  if (cursor < text.length) parts.push(<WordText key="last" text={text.slice(cursor)} />);
+  if (cursor < text.length) parts.push(<WordText key="last" text={text.slice(cursor)} ruby={ruby} />);
   return <>{parts}</>;
 }
 
-export default function Reader({ book, settings, highlights, savedWords, sentences, onBack, onUpdateBook, onSettings, onAddVocab, onAddHighlight, onAddSentence, onSaveVoice, onNotify }: {
+export default function Reader({ book, settings, highlights, savedWords, sentences, wordStates, glosses, onBack, onUpdateBook, onSettings, onAddVocab, onAddHighlight, onAddSentence, onSetWordState, onSaveVoice, onNotify }: {
   book: Book;
   settings: ReaderSettings;
   highlights: Highlight[];
   savedWords: string[];
   sentences: SavedSentence[];
+  wordStates: Record<string, WordState>;
+  glosses: Record<string, WordGloss>;
   onBack: () => void;
   onUpdateBook: (id: string, update: Partial<Book>) => void;
   onSettings: (settings: Partial<ReaderSettings>) => void;
   onAddVocab: (entry: NewVocab) => void;
   onAddHighlight: (highlight: NewHighlight) => void;
   onAddSentence: (sentence: NewSentence) => void;
+  onSetWordState: (word: string, state: WordState, gloss?: WordGloss) => void;
   onSaveVoice: (record: VoiceRecord, audio: Blob) => Promise<boolean>;
   onNotify: (message: string, tone?: 'success' | 'error') => void;
 }) {
@@ -142,6 +150,11 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     return () => { active = false; };
   }, [lookup]);
   const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter?.id), [highlights, book.id, chapter?.id]);
+  // 常驻注音：模式（off/learning/all）+ 词状态 + 释义缓存 → 每个词是否显示 ruby。
+  const annotationMode: AnnotationMode = settings.annotationMode || 'learning';
+  const rubyFor = (word: string) => rubyGlossFor(word, annotationMode, wordStates, glosses);
+  const stats = useMemo(() => chapterStats(chapter?.paragraphs || [], wordStates, glosses, annotationMode), [chapter, wordStates, glosses, annotationMode]);
+  const lookupState = lookup ? wordStates[normalizeWord(lookup.word)] : undefined;
 
   useEffect(() => {
     onUpdateBook(book.id, { currentChapter: chapterIndex, currentParagraph: 0, progress: book.chapters.length ? Math.round((chapterIndex / book.chapters.length) * 100) : 0, lastReadAt: new Date().toISOString() });
@@ -177,7 +190,8 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   const handleParagraphClick = (event: React.MouseEvent<HTMLParagraphElement>, paragraphIndex: number) => {
     if ((window.getSelection()?.toString() || '').trim()) return;
     const target = event.target as HTMLElement;
-    const word = target.dataset.word;
+    // 点击可能落在 ruby/rt 上，向上找到带 data-word 的词 span。
+    const word = target.closest('[data-word]')?.getAttribute('data-word');
     if (word) {
       setLookup({ word: normalizeWord(word), context: chapter.paragraphs[paragraphIndex], paragraphIndex });
       setSelection(null);
@@ -228,6 +242,15 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     if (sentenceSaved) { onNotify('这句话已经在你的句子收藏里'); return; }
     onAddSentence({ text: lookupSentence, word: normalizeWord(lookup.word), meaning: dictionary?.meaning || '', phonetic: dictionary?.phonetic || '', bookId: book.id, bookTitle: book.title, chapterId: chapter.id, chapterTitle: chapter.title, paragraphIndex: lookup.paragraphIndex });
     onNotify('已收藏这句话，可在「笔记」页回顾');
+  };
+
+  // 词状态标记：学习中→阅读页常驻注音；已掌握→移除注音（页面逐渐「裸」下来）。
+  const markState = (state: WordState) => {
+    if (!lookup) return;
+    const word = normalizeWord(lookup.word);
+    const glossText = dictionary?.chinese || dictionary?.meaning || '';
+    onSetWordState(word, state, glossText ? { zh: glossText.split('；')[0].slice(0, 14), phonetic: dictionary?.phonetic } : undefined);
+    onNotify(state === 'learning' ? `已标为学习中，${word} 将在原文显示常驻注音` : `已标为已掌握，${word} 的注音将移除`);
   };
 
   const speakSentence = () => {
@@ -294,10 +317,10 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   if (!chapter) return <div className={`reader-page reader-theme-${settings.theme}`}><div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>无法阅读</span></div></div></div><div className="reader-layout"><article className="reader-article"><div className="empty-page-note"><p>这本书没有可阅读的章节，可能是备份数据损坏或导入不完整。请返回书库删除后重新导入。</p><Button variant="secondary" onClick={onBack}><ArrowLeft size={16} />返回书库</Button></div></article></div></div>;
 
   return <div className={`reader-page reader-theme-${settings.theme}`}>
-    <div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>{chapter.title}</span></div></div><div className="reader-toolbar-center"><span>CHAPTER {String(chapterIndex + 1).padStart(2, '0')}</span><ProgressBar value={Math.round(((chapterIndex + 1) / book.chapters.length) * 100)} /></div><div className="reader-toolbar-actions"><button className={`icon-button ${contentsOpen ? 'active' : ''}`} onClick={() => setContentsOpen(!contentsOpen)} aria-label="目录"><List size={19} /></button>{canImage && <div className="view-toggle" role="group" aria-label="阅读模式"><button className={`icon-button ${viewMode === 'text' ? 'active' : ''}`} onClick={() => switchView('text')} aria-label="文字模式" title="文字模式"><Type size={18} /></button><button className={`icon-button ${viewMode === 'image' ? 'active' : ''}`} onClick={() => switchView('image')} aria-label="图片模式" title="原书图片"><ImageIcon size={18} /></button></div>}<button className={`icon-button ${(audioSrc && audioOpen) || audioBindOpen ? 'active' : ''}`} onClick={() => { if (audioSrc) setAudioOpen(!audioOpen); else setAudioBindOpen(true); }} aria-label="有声书边听边看" title={audioSrc ? (audioOpen ? '隐藏有声书播放条' : '显示有声书播放条') : '绑定有声书，边听边看'}><Headphones size={19} /></button><div className="appearance-wrap"><button className={`icon-button ${appearanceOpen ? 'active' : ''}`} onClick={() => setAppearanceOpen(!appearanceOpen)} aria-label="阅读版式"><Settings2 size={19} /></button>{appearanceOpen && <div className="appearance-panel glass-panel"><span className="eyebrow">READING APPEARANCE</span><h3>让正文更适合你</h3><div className="setting-row"><span>字号</span><div className="stepper"><button onClick={() => onSettings({ fontSize: Math.max(16, settings.fontSize - 1) })}><Minus size={15} /></button><strong>{settings.fontSize}</strong><button onClick={() => onSettings({ fontSize: Math.min(26, settings.fontSize + 1) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>行距</span><div className="stepper"><button onClick={() => onSettings({ lineHeight: Math.max(1.5, Number((settings.lineHeight - 0.1).toFixed(1))) })}><Minus size={15} /></button><strong>{settings.lineHeight.toFixed(1)}</strong><button onClick={() => onSettings({ lineHeight: Math.min(2.1, Number((settings.lineHeight + 0.1).toFixed(1))) })}><Plus size={15} /></button></div></div><div className="theme-options">{(['midnight', 'sepia', 'paper'] as const).map((theme) => <button key={theme} className={`${theme} ${settings.theme === theme ? 'active' : ''}`} onClick={() => onSettings({ theme })}><span>Aa</span><small>{theme === 'midnight' ? '暗夜' : theme === 'sepia' ? '羊皮纸' : '白纸'}</small></button>)}</div></div>}</div></div></div>
+    <div className="reader-toolbar glass-panel"><div className="reader-toolbar-left"><button className="icon-button" onClick={onBack} aria-label="返回书库"><ArrowLeft size={20} /></button><div className="reader-book-title"><strong>{book.title}</strong><span>{chapter.title}</span></div></div><div className="reader-toolbar-center"><span>CHAPTER {String(chapterIndex + 1).padStart(2, '0')}</span><ProgressBar value={Math.round(((chapterIndex + 1) / book.chapters.length) * 100)} /></div><div className="reader-toolbar-actions"><button className={`icon-button ${contentsOpen ? 'active' : ''}`} onClick={() => setContentsOpen(!contentsOpen)} aria-label="目录"><List size={19} /></button>{canImage && <div className="view-toggle" role="group" aria-label="阅读模式"><button className={`icon-button ${viewMode === 'text' ? 'active' : ''}`} onClick={() => switchView('text')} aria-label="文字模式" title="文字模式"><Type size={18} /></button><button className={`icon-button ${viewMode === 'image' ? 'active' : ''}`} onClick={() => switchView('image')} aria-label="图片模式" title="原书图片"><ImageIcon size={18} /></button></div>}<button className={`icon-button ${(audioSrc && audioOpen) || audioBindOpen ? 'active' : ''}`} onClick={() => { if (audioSrc) setAudioOpen(!audioOpen); else setAudioBindOpen(true); }} aria-label="有声书边听边看" title={audioSrc ? (audioOpen ? '隐藏有声书播放条' : '显示有声书播放条') : '绑定有声书，边听边看'}><Headphones size={19} /></button><div className="appearance-wrap"><button className={`icon-button ${appearanceOpen ? 'active' : ''}`} onClick={() => setAppearanceOpen(!appearanceOpen)} aria-label="阅读版式"><Settings2 size={19} /></button>{appearanceOpen && <div className="appearance-panel glass-panel"><span className="eyebrow">READING APPEARANCE</span><h3>让正文更适合你</h3><div className="setting-row"><span>字号</span><div className="stepper"><button onClick={() => onSettings({ fontSize: Math.max(16, settings.fontSize - 1) })}><Minus size={15} /></button><strong>{settings.fontSize}</strong><button onClick={() => onSettings({ fontSize: Math.min(26, settings.fontSize + 1) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>行距</span><div className="stepper"><button onClick={() => onSettings({ lineHeight: Math.max(1.5, Number((settings.lineHeight - 0.1).toFixed(1))) })}><Minus size={15} /></button><strong>{settings.lineHeight.toFixed(1)}</strong><button onClick={() => onSettings({ lineHeight: Math.min(2.1, Number((settings.lineHeight + 0.1).toFixed(1))) })}><Plus size={15} /></button></div></div><div className="setting-row"><span>常驻注音</span><select className="annotation-select" value={annotationMode} onChange={(event) => onSettings({ annotationMode: event.target.value as AnnotationMode })} aria-label="常驻注音模式"><option value="off">关闭</option><option value="learning">仅学习中</option><option value="all">全部有释义</option></select></div><div className="theme-options">{(['midnight', 'sepia', 'paper'] as const).map((theme) => <button key={theme} className={`${theme} ${settings.theme === theme ? 'active' : ''}`} onClick={() => onSettings({ theme })}><span>Aa</span><small>{theme === 'midnight' ? '暗夜' : theme === 'sepia' ? '羊皮纸' : '白纸'}</small></button>)}</div></div>}</div></div></div>
     <div className="reader-layout">
       <article className={`reader-article ${viewMode === 'image' && pageImage ? 'reader-article-image' : ''}`} ref={articleRef} style={{ '--reader-size': `${settings.fontSize}px`, '--reader-leading': settings.lineHeight } as React.CSSProperties}>
-        <header className="chapter-header"><span className="eyebrow">PAGE {String(pageNumber).padStart(2, '0')}</span><h1>{chapter.title}</h1><p>{book.title} · {book.author}</p><div className="chapter-rule"><span /></div></header>
+        <header className="chapter-header"><span className="eyebrow">PAGE {String(pageNumber).padStart(2, '0')}</span><h1>{chapter.title}</h1><p>{book.title} · {book.author}</p><div className="chapter-stats" aria-label="本章掌握进度"><span className="stat-chip known">已掌握 {stats.known}</span><span className="stat-chip learning">学习中 {stats.learning}</span><span className="stat-chip">覆盖率 {stats.coveragePct}%</span><span className="stat-chip">裸页 {stats.barePct}%</span></div><div className="chapter-rule"><span /></div></header>
         {viewMode === 'image' && pageImage ? (
           <div className={`page-image ${zoom ? 'zoom' : ''}`} onClick={() => setZoom(!zoom)} title="点击切换缩放">
             <div className="page-image-stage">
@@ -311,7 +334,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
         ) : (
           <>
             <div className="reading-tip"><Sparkles size={15} /><span>轻点单词查义，选中句子做标记。让 AI 退后一步，让注意力留在原文。</span></div>
-            <div className="chapter-body">{chapter.paragraphs.length ? chapter.paragraphs.map((paragraph, index) => <p id={`paragraph-${index}`} data-paragraph={index} key={`${chapter.id}-${index}`} onMouseUp={() => captureSelection(index)} onTouchEnd={() => captureSelection(index)} onClick={(event) => handleParagraphClick(event, index)}><RichParagraph text={paragraph} marks={chapterMarks.filter((mark) => mark.paragraphIndex === index)} /></p>) : <p className="empty-page-note">这一页是插画，没有文字。切到「图片」看原版。</p>}</div>
+            <div className="chapter-body">{chapter.paragraphs.length ? chapter.paragraphs.map((paragraph, index) => <p id={`paragraph-${index}`} data-paragraph={index} key={`${chapter.id}-${index}`} onMouseUp={() => captureSelection(index)} onTouchEnd={() => captureSelection(index)} onClick={(event) => handleParagraphClick(event, index)}><RichParagraph text={paragraph} marks={chapterMarks.filter((mark) => mark.paragraphIndex === index)} ruby={rubyFor} /></p>) : <p className="empty-page-note">这一页是插画，没有文字。切到「图片」看原版。</p>}</div>
           </>
         )}
         <div className="chapter-end"><span>{chapter.paragraphs.length ? 'END OF PAGE' : 'END OF PAGE'}</span><div><Button variant="secondary" disabled={chapterIndex === 0} onClick={() => goToChapter(chapterIndex - 1)}><ChevronLeft size={17} />上一页</Button><Button disabled={chapterIndex === book.chapters.length - 1} onClick={() => goToChapter(chapterIndex + 1)}>下一页<ChevronRight size={17} /></Button></div></div>
@@ -325,6 +348,10 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
         <div className="lookup-grabber" />
         <div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : dictionary ? (remote?.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))} aria-label="朗读单词"><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)} aria-label="关闭查词面板"><X size={20} /></button></div>
         <div className="dictionary-section lookup-definition"><span className="dictionary-number">01</span><div><h3>释义</h3>{dictionary ? <><p className="dictionary-meaning">{dictionary.meaning}</p>{dictionary.chinese && <p className="dictionary-cn">{dictionary.chinese}</p>}</> : remoteLoading ? <p className="dictionary-meaning muted">本地词库未收录，正在查询服务器词典…</p> : <p className="dictionary-meaning muted">本地与在线词典都暂未收录这个词（离线时仅用本地词库）。你仍可将它和原句一起收藏，之后补充讲解。</p>}</div></div>
+        <div className="word-state-row" role="group" aria-label="词状态">
+          <button className={`state-btn learning ${lookupState === 'learning' ? 'on' : ''}`} onClick={() => markState('learning')}>{lookupState === 'learning' ? <Check size={15} /> : <Plus size={15} />}学习中 · 显示注音</button>
+          <button className={`state-btn known ${lookupState === 'known' ? 'on' : ''}`} onClick={() => markState('known')}>{lookupState === 'known' ? <Check size={15} /> : <Check size={15} />}已掌握 · 移除注音</button>
+        </div>
         <div className="dictionary-section"><span className="dictionary-number">02</span><div>
           <div className="sentence-head"><h3>原句</h3><button className="text-toggle" onClick={() => setShowFullParagraph(!showFullParagraph)}>{showFullParagraph ? '只看句子' : '查看整段'}</button></div>
           <blockquote className="lookup-sentence">{showFullParagraph ? lookup.context : sentenceParts(lookupSentence, lookup.word).map((part, index) => part.hit ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>)}</blockquote>

@@ -49,5 +49,14 @@ export function validateBackup(parsed: unknown): AppData {
       if (!sentence || !str(sentence.id) || !str(sentence.text) || !str(sentence.bookId) || !num(sentence.paragraphIndex)) throw new Error(`第 ${index + 1} 条收藏句子损坏`);
     });
   }
+  // 词状态 / 注音缓存是后加字段：旧备份没有时跳过（恢复端回退 {}），有则做形状校验。
+  if (raw.wordStates !== undefined) {
+    if (!raw.wordStates || typeof raw.wordStates !== 'object' || Array.isArray(raw.wordStates)) throw new Error('词状态格式不正确');
+    for (const value of Object.values(raw.wordStates as Record<string, unknown>)) if (value !== 'learning' && value !== 'known') throw new Error('词状态取值无法识别');
+  }
+  if (raw.glosses !== undefined) {
+    if (!raw.glosses || typeof raw.glosses !== 'object' || Array.isArray(raw.glosses)) throw new Error('注音释义缓存格式不正确');
+    for (const value of Object.values(raw.glosses as Record<string, unknown>)) { const gloss = value as Record<string, unknown>; if (!gloss || !str(gloss.zh)) throw new Error('注音释义缓存损坏'); }
+  }
   return parsed as AppData;
 }

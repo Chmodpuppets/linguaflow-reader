@@ -768,3 +768,22 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .filter-chip.active { background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.5); color: #6ee7b7; }
 .tools-hint { font-size: 12px; color: var(--muted, #94a3b8); }
 @media (max-width: 767px) { .tools-hint { display: none; } }
+
+/* ── 常驻注音 + 词状态 + 覆盖率（释义常驻，逐渐裸页） ───────────── */
+.reader-page ruby{ruby-align:center}
+.reader-page ruby rt{font-size:.55em;line-height:1.1;letter-spacing:.02em;color:#e8b04b;font-weight:600}
+.reader-theme-sepia ruby rt,.reader-theme-paper ruby rt{color:#b45309}
+.word-annotated{border-bottom:1px dashed color-mix(in srgb,currentColor 45%,transparent)}
+.chapter-stats{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px}
+.stat-chip{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid color-mix(in srgb,currentColor 22%,transparent);color:inherit;opacity:.85}
+.stat-chip.known{color:#34d399;border-color:color-mix(in srgb,#34d399 45%,transparent)}
+.stat-chip.learning{color:#e8b04b;border-color:color-mix(in srgb,#e8b04b 45%,transparent)}
+.reader-theme-sepia .stat-chip.known,.reader-theme-paper .stat-chip.known{color:#047857}
+.reader-theme-sepia .stat-chip.learning,.reader-theme-paper .stat-chip.learning{color:#b45309}
+.word-state-row{display:flex;gap:8px;flex-wrap:wrap;padding:0 0 4px}
+.state-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:7px 12px;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 25%,transparent);background:transparent;color:inherit;cursor:pointer;transition:background .15s,border-color .15s}
+.state-btn:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+.state-btn.learning.on{color:#e8b04b;border-color:#e8b04b;background:color-mix(in srgb,#e8b04b 12%,transparent)}
+.state-btn.known.on{color:#34d399;border-color:#34d399;background:color-mix(in srgb,#34d399 12%,transparent)}
+.annotation-select{background:transparent;color:inherit;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:8px;padding:4px 8px;font-size:13px}
+.annotation-select option{color:#111}

@@ -27,5 +27,7 @@ export const initialData: AppData = {
   reviewLogs: [],
   voiceRecords: [],
   sentences: [{ id: 'seed-sentence', text: 'The world is not finished being interesting.', word: 'interesting', meaning: 'a. 有趣的, 引起好奇心的, 有意义的', phonetic: "'intristiŋ", bookId: 'art-of-noticing', bookTitle: 'The Art of Noticing', chapterId: 'noticing-1', chapterTitle: 'The world is not finished', paragraphIndex: 4, createdAt: '2026-10-26T12:00:00.000Z' }],
-  settings: { fontSize: 19, lineHeight: 1.8, theme: 'midnight', reducedAmbient: true },
+  settings: { fontSize: 19, lineHeight: 1.8, theme: 'midnight', reducedAmbient: true, annotationMode: 'learning' },
+  wordStates: {},
+  glosses: {},
 };

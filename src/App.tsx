@@ -11,7 +11,7 @@ import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
 import { getCachedKnownWords, isSyncEnabled, knownWordsStale, recordEvent, refreshKnownWords, startLearningSync } from './lib/learning';
-import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord } from './types';
+import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
 // 拆成独立 chunk 后，首页只下载书库 + 词汇 + 外壳，首屏从 682KB 降到百来 KB 量级。
@@ -119,6 +119,8 @@ export default function App() {
             vocabulary: stored.vocabulary.map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
             voiceRecords: stored.voiceRecords || [],
             sentences: stored.sentences || [],
+            wordStates: stored.wordStates || {},
+            glosses: stored.glosses || {},
           };
           // 老数据里可能没有后来新增的内置书：按 id 补齐，不动用户的词汇/笔记/进度
           const missing = initialData.books.filter((book) => !migrated.books.some((existing) => existing.id === book.id));
@@ -208,6 +210,12 @@ export default function App() {
     const ok = await askConfirm({ title: '删除收藏句子', message: '确定从句子收藏里移除这句话吗？', confirmLabel: '删除', danger: true });
     if (ok) setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
   };
+  // 词状态 + 常驻注音释义缓存：标记学习中/已掌握时写入，阅读页据此渲染 ruby 与覆盖率。
+  const setWordState = (word: string, state: WordState, gloss?: WordGloss) => setData((current) => ({
+    ...current,
+    wordStates: { ...(current.wordStates || {}), [word]: state },
+    glosses: gloss ? { ...(current.glosses || {}), [word]: gloss } : (current.glosses || {}),
+  }));
   const deleteVocab = async (id: string) => {
     const ok = await askConfirm({ title: '删除词条', message: '确定删除这个词条吗？原文和复习记录也会从词汇本移除。', confirmLabel: '删除', danger: true });
     if (ok) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
@@ -288,7 +296,7 @@ export default function App() {
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {
-    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [] });
+    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {} });
     setActiveBookId(null);
     setPage('library');
     notify('备份已恢复，欢迎回到你的阅读空间');
@@ -297,7 +305,7 @@ export default function App() {
   if (!ready) return <div className="loading-screen"><img src="/linguaflow-icon.png" alt="LinguaFlow" /><div className="loading-line"><span /></div><p>正在打开你的本地阅读空间…</p></div>;
 
   let content: React.ReactNode;
-  if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
+  if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
   else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onDelete={deleteBook} importing={importing} importProgress={importProgress} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} onReview={addReview} onBack={() => setPage('library')} />;

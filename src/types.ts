@@ -106,6 +106,17 @@ export interface ReaderSettings {
   lineHeight: number;
   theme: ReaderTheme;
   reducedAmbient: boolean;
+  /** 常驻注音模式：off 关闭 / learning 仅学习中 / all 全部有释义的词。旧数据无此字段时回退 learning。 */
+  annotationMode?: 'off' | 'learning' | 'all';
+}
+
+/** 词状态：new（未标记，默认）/ learning（学习中，显示注音）/ known（已掌握，移除注音）。 */
+export type WordState = 'learning' | 'known';
+
+/** 常驻注音用的简短释义缓存（查词 / 标记时写入），避免每次渲染都请求词典。 */
+export interface WordGloss {
+  zh: string;
+  phonetic?: string;
 }
 
 export type VoiceMode = 'shadowing' | 'retell' | 'freetalk';
@@ -147,6 +158,10 @@ export interface AppData {
   voiceRecords: VoiceRecord[];
   /** 收藏的句子（旧备份可能没有该字段，读取时回退 []）。 */
   sentences?: SavedSentence[];
+  /** 词状态 map（word→learning/known）。旧备份无此字段时回退 {}。 */
+  wordStates?: Record<string, WordState>;
+  /** 常驻注音释义缓存（word→{zh,phonetic}）。旧备份无此字段时回退 {}。 */
+  glosses?: Record<string, WordGloss>;
   settings: ReaderSettings;
 }
 
