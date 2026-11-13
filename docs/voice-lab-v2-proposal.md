@@ -59,6 +59,11 @@
 
 ### Tier 1 · 补最大缺口
 
+> **实现状态（2026-11-13）**：① 韵律反馈与 ② 可懂度简单档已上线。
+> 代码：`src/lib/prosody.ts`（`wordFeaturesFromBuffer` / `classifyProsody` / `intelligibilityGaps`）+ `src/components/VoiceRecorder.tsx`（解码原音/录音→逐词能量/浊音对齐；可懂度面板）。
+> 逐词边界采用「浊音区间等分」（无 Whisper word timestamps 的稳妥近似）；韵律输出标注「节奏相似度，非发音正确度」。
+> ② 进阶档（token logprob）与 Tier 2/3 仍待后续。算法有 node 单测；麦克风链路在无头 headless-shell 无法跑 E2E（fake device 不生效），故以单测+构建+线上加载验证。
+
 #### ① 韵律反馈 · prosody shadowing ｜ 优先级 P0
 
 - **科学依据**：英语重音计时，中文音节计时；重音（更长 + 更响 + 音高更高）是中文母语者最痛的点。
