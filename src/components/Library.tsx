@@ -16,12 +16,26 @@ function DifficultyBadge({ book, known }: { book: Book; known: ReadonlySet<strin
 export default function Library({ books, knownWords, onOpen, onImport, onDelete, importing, importProgress }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null }) {
   const knownSet = useMemo(() => new Set((knownWords || []).map((word) => word.toLowerCase())), [knownWords]);
   const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState<'default' | 'match'>('default');
+  const [onlyIdeal, setOnlyIdeal] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const recent = [...books].sort((a, b) => (b.lastReadAt || '').localeCompare(a.lastReadAt || ''))[0];
   const recentDiff = recent ? bookDifficulty(recent, knownSet) : null;
   const filtered = books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(query.toLowerCase()));
+  // 选书推荐：按覆盖率与 i+1（90–98%）区间的接近程度排序；无法评估的书排最后。
+  const diffs = useMemo(() => new Map(books.map((book) => [book.id, bookDifficulty(book, knownSet)])), [books, knownSet]);
+  const canMatch = knownSet.size > 0;
+  const displayed = useMemo(() => {
+    let list = filtered;
+    if (canMatch && onlyIdeal) list = list.filter((book) => diffs.get(book.id)?.band.ideal);
+    if (canMatch && sortMode === 'match') {
+      const rank = (book: Book) => { const d = diffs.get(book.id); return d ? { ideal: d.band.ideal ? 1 : 0, dist: Math.abs(d.coverage - 94), cov: d.coverage } : { ideal: 0, dist: 999, cov: -1 }; };
+      list = [...list].sort((a, b) => { const ra = rank(a); const rb = rank(b); return rb.ideal - ra.ideal || ra.dist - rb.dist || rb.cov - ra.cov; });
+    }
+    return list;
+  }, [filtered, canMatch, onlyIdeal, sortMode, diffs]);
   const totalProgress = books.length ? Math.round(books.reduce((sum, book) => sum + book.progress, 0) / books.length) : 0;
   const handleFile = async (file?: File) => {
     if (!file) return;
@@ -35,7 +49,15 @@ export default function Library({ books, knownWords, onOpen, onImport, onDelete,
       <button className={`hero-book ${recent.coverImage ? 'has-image' : ''}`} style={{ '--accent': recent.accent } as React.CSSProperties} onClick={() => onOpen(recent)} aria-label={`阅读 ${recent.title}`}>{recent.coverImage ? <img className="book-cover-img" src={recent.coverImage} alt={`《${recent.title}》封面`} /> : <><span>LINGUAFLOW EDITIONS</span><strong>{recent.cover}</strong><small>{recent.author}</small><i /></>}</button>
     </section>}
     <section className="library-section"><div className="section-heading"><div><h2>我的书库 <span>{books.length}</span></h2><p>你的书、你的笔记、你的学习语境。</p></div><label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" /></label></div>
-      {filtered.length ? <div className="book-grid">{filtered.map((book) => <article className="book-card glass-panel" key={book.id}>
+      {canMatch && <div className="library-tools" role="group" aria-label="选书排序与筛选">
+        <div className="seg-control">
+          <button className={sortMode === 'default' ? 'active' : ''} onClick={() => setSortMode('default')}>综合</button>
+          <button className={sortMode === 'match' ? 'active' : ''} onClick={() => setSortMode('match')}><Sparkles size={14} />难度匹配</button>
+        </div>
+        <button className={`filter-chip ${onlyIdeal ? 'active' : ''}`} aria-pressed={onlyIdeal} onClick={() => setOnlyIdeal((v) => !v)}>只看 i+1 · 匹配你的水平</button>
+        <span className="tools-hint">覆盖率 90–98% 为 i+1：多数词认识、少量新词，读得动又有收获。</span>
+      </div>}
+      {displayed.length ? <div className="book-grid">{displayed.map((book) => <article className="book-card glass-panel" key={book.id}>
         <button className={`book-cover ${book.coverImage ? 'has-image' : ''}`} style={{ '--accent': book.accent } as React.CSSProperties} onClick={() => onOpen(book)} aria-label={`阅读 ${book.title}`}>{book.coverImage ? <img className="book-cover-img" src={book.coverImage} alt={`《${book.title}》封面`} loading="lazy" /> : <><span>LINGUAFLOW EDITIONS</span><strong>{book.cover}</strong><small>{book.author}</small><i /></>}</button>
         <div className="book-info"><div className="book-source">{book.source === 'epub' ? 'EPUB' : 'ORIGINAL SAMPLE'}</div><h3>{book.title}</h3><p>{book.author}</p><DifficultyBadge book={book} known={knownSet} /><div className="book-progress"><div><span>{book.progress ? `已读 ${book.progress}%` : '尚未开始'}</span><span>{book.chapters.length} 章</span></div><ProgressBar value={book.progress} /></div><div className="book-actions"><Button variant="secondary" size="sm" onClick={() => onOpen(book)}>{book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={15} /></Button>{book.source === 'epub' && onDelete && <button className="book-delete" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`} title="删除这本书（含相关笔记与练习记录）"><Trash2 size={14} /></button>}</div></div>
       </article>)}</div> : <EmptyState icon={<LibraryIcon size={28} />} title="没有找到这本书" description="试试其他关键词，或导入一本新的 EPUB。" action={<Button onClick={() => setImportOpen(true)}>导入书籍</Button>} />}

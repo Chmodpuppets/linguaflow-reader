@@ -85,5 +85,10 @@ test('书库难度匹配：连接后按已知词显示覆盖率徽章', async ({
   const badge = page.locator('.difficulty-badge').first();
   await expect(badge).toBeVisible();
   await expect(badge).toContainText('%');
+  // 选书推荐工具条：难度匹配排序 + 只看 i+1 筛选，切换不崩溃。
+  await expect(page.locator('.library-tools')).toBeVisible();
+  await page.getByRole('button', { name: /难度匹配/ }).click();
+  await page.getByRole('button', { name: /只看 i\+1/ }).click();
+  await expect(page.locator('.book-grid, .empty-state').first()).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
