@@ -10,7 +10,7 @@ test('缺本机书籍 JSON 时降级为内置样书+分级书架，不出现内�
 
   await page.goto('/');
 
-  await expect(page.locator('.book-card')).toHaveCount(9);
+  await expect(page.locator('.book-card')).toHaveCount(10);
   await expect(page.getByText('Diary of a Wimpy Kid')).toHaveCount(0);
   await expect(page.locator('.library-page')).toBeVisible();
   expect(pageErrors).toEqual([]);

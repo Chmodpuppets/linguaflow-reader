@@ -3,15 +3,18 @@ import assert from 'node:assert/strict';
 import { gradedBooks, gradedGlosses } from '../../src/data/gradedReaders';
 import { chapterWords, chapterStats } from '../../src/lib/annotation';
 
-test('分级书架：三档 CEFR 各两本、正文非空、source=sample', () => {
-  assert.equal(gradedBooks.length, 6);
-  for (const level of ['A1', 'A2', 'B1']) {
-    assert.equal(gradedBooks.filter((b) => b.level === level).length, 2, level);
+test('分级书架：A1/A2/B1 各两本 + B2 原著桥、正文非空、source=sample', () => {
+  assert.equal(gradedBooks.length, 7);
+  const perLevel: Record<string, number> = { A1: 2, A2: 2, B1: 2, B2: 1 };
+  for (const [level, n] of Object.entries(perLevel)) {
+    assert.equal(gradedBooks.filter((b) => b.level === level).length, n, level);
   }
   for (const b of gradedBooks) {
     assert.equal(b.source, 'sample');
     assert.ok(b.chapters[0].paragraphs.length >= 4, b.id);
   }
+  const bridge = gradedBooks.find((b) => b.level === 'B2');
+  assert.ok(bridge && /Gatsby/.test(bridge.title), 'B2 原著桥应为盖茨比');
 });
 
 test('分级注音：预置释义覆盖书中真实词', () => {

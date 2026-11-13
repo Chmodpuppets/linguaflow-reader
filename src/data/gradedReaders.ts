@@ -116,6 +116,26 @@ export const gradedBooks: Book[] = [
       "'You are like these sticks,' he said. 'United you are strong; divided you are weak.'",
     ],
   ),
+  // 改写经典：把用户正在读的原著《了不起的盖茨比》（公版）开头改写到 B2，
+  // 作为「分级桥→原著」的最后一阶，读完即可无缝进入原著 Chapter 1。
+  book(
+    'graded-b2-gatsby',
+    'B2',
+    'The Great Gatsby (Graded Bridge)',
+    'B2 · GATSBY',
+    '#38bdf8',
+    '原著桥：把《了不起的盖茨比》开头改写到 B2，读完即可进入原著。',
+    [
+      'My father once told me that whenever I feel like criticizing anyone, I should remember that not everyone has had the advantages I have had.',
+      'I have kept that advice in mind ever since. I try to reserve judgment, and because of this, many people have opened their hearts to me.',
+      'In my younger years I lived in the East, near a wealthy village called West Egg, where the great houses of the new rich stood beside the water.',
+      'Across the bay lived my cousin Daisy and her husband Tom Buchanan, a man of enormous wealth and little patience.',
+      'And beyond them, in a mansion that copied the castles of Europe, lived Jay Gatsby, a man nobody seemed to know.',
+      'Every Saturday his house filled with strangers, music, and light; yet the host himself remained a rumor.',
+      'I did not know then that Gatsby spent his nights reaching toward a single green light at the end of Daisy’s dock.',
+      'That light, small and far away, was the whole of his hope — the future he had invented and refused to give up.',
+    ],
+  ),
 ];
 
 // 为分级书架预置注音释义：切到「全部有释义」即可看到 ruby，降低冷启动查词摩擦。
@@ -169,4 +189,16 @@ export const gradedGlosses: Record<string, WordGloss> = {
   united: { zh: '团结' },
   divided: { zh: '分裂' },
   weak: { zh: '弱小' },
+  criticizing: { zh: '批评' },
+  advantages: { zh: '优势' },
+  reserve: { zh: '保留' },
+  judgment: { zh: '评判' },
+  wealthy: { zh: '富裕' },
+  mansion: { zh: '豪宅' },
+  enormous: { zh: '巨大' },
+  rumor: { zh: '传闻' },
+  host: { zh: '主人' },
+  dock: { zh: '码头' },
+  invented: { zh: '虚构' },
+  refused: { zh: '拒绝' },
 };
