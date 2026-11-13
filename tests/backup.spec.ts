@@ -40,7 +40,7 @@ test('畸形书籍条目（空 chapters 的 EPUB）被拒绝，不进入书库',
   await expect(page.locator('.toast')).toContainText('备份恢复失败');
   await expect(page.locator('.toast')).toContainText('没有可阅读的章节');
   await page.locator('.main-nav .nav-item', { hasText: '我的书库' }).click();
-  await expect(page.locator('.book-card')).toHaveCount(3);
+  await expect(page.locator('.book-card')).toHaveCount(6);
   expect(pageErrors).toEqual([]);
 });
 

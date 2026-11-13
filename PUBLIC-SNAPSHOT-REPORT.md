@@ -1,7 +1,7 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：91
+文件数：93
 总大小：1.18 MB
 
 结论：✅ 未发现版权素材或书籍正文
@@ -53,6 +53,7 @@
 - `src/components/VoiceRecorder.tsx`
 - `src/data/builtinBooks.ts`
 - `src/data/dictionary.ts`
+- `src/data/gradedReaders.ts`
 - `src/data/initialData.ts`
 - `src/data/sampleBooks.ts`
 - `src/fonts.css`
@@ -94,6 +95,7 @@
 - `tests/unit/audioAlign.test.ts`
 - `tests/unit/backup.test.ts`
 - `tests/unit/difficulty.test.ts`
+- `tests/unit/graded.test.ts`
 - `tests/unit/learning.test.ts`
 - `tests/unit/lingq.test.ts`
 - `tests/unit/sentence.test.ts`

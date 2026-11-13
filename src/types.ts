@@ -29,6 +29,8 @@ export interface Book {
   audio?: string;
   /** 从 EPUB 提取并压缩后的真实封面（data URL）。存在时书库优先展示它而非生成封面。 */
   coverImage?: string;
+  /** CEFR 分级标签（A1–B2），用于分级入门书架与难度展示。 */
+  level?: string;
 }
 
 export interface DictionaryEntry {

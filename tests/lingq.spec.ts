@@ -62,3 +62,16 @@ test('句子回译：收藏句子进入复习，挖空答对计入复习记录',
   await expect(page.locator('.cloze-full')).toContainText('spotlight of the mind');
   expect(pageErrors).toEqual([]);
 });
+
+test('分级入门书架：A1/A2/B1 徽章 + 全部有释义模式显示 ruby', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.goto('/');
+  await expect(page.locator('.level-badge')).toHaveCount(3);
+  await page.getByRole('button', { name: '打开《The Tortoise and the Hare》' }).click();
+  await expect(page.locator('.chapter-body')).toContainText('tortoise');
+  await page.getByRole('button', { name: '阅读版式' }).click();
+  await page.locator('.annotation-select').selectOption('all');
+  await expect(page.locator('.chapter-body ruby rt').first()).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});

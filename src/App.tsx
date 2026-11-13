@@ -4,6 +4,7 @@ import AppShell from './components/AppShell';
 import { ConfirmDialog } from './components/UI';
 import Library from './components/Library';
 import { initialData } from './data/initialData';
+import { gradedGlosses } from './data/gradedReaders';
 import { loadBuiltinBooks } from './data/builtinBooks';
 import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, type StorageChannel } from './lib/db';
 import { notifyBookAudioChanged } from './lib/bookAudio';
@@ -121,7 +122,7 @@ export default function App() {
             voiceRecords: stored.voiceRecords || [],
             sentences: stored.sentences || [],
             wordStates: stored.wordStates || {},
-            glosses: stored.glosses || {},
+            glosses: { ...gradedGlosses, ...(stored.glosses || {}) },
           };
           // 老数据里可能没有后来新增的内置书：按 id 补齐，不动用户的词汇/笔记/进度
           const missing = initialData.books.filter((book) => !migrated.books.some((existing) => existing.id === book.id));
