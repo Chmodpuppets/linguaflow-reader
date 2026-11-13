@@ -275,6 +275,20 @@ export default function App() {
       reviewLogs: [{ id: makeId('review'), vocabId: entry.id, result, mode, createdAt: new Date().toISOString() }, ...current.reviewLogs],
     }));
   };
+  // 句子回译：把收藏句子的练习结果计入复习记录（streak/每日目标），并强化对应单词的 SRS。
+  const reviewSentence = (sentence: SavedSentence, result: ReviewLog['result']) => {
+    recordEvent({ type: 'review', word: sentence.word, bookId: sentence.bookId, payload: { result, mode: 'sentence', sentenceId: sentence.id } });
+    const increments = { again: 0, hard: 1, good: 2, easy: 3 };
+    const days = { again: 0, hard: 1, good: 3, easy: 7 };
+    setData((current) => {
+      const match = current.vocabulary.find((item) => item.word.toLowerCase() === sentence.word.toLowerCase());
+      return {
+        ...current,
+        vocabulary: match ? current.vocabulary.map((item) => item.id === match.id ? { ...item, familiarity: Math.max(0, Math.min(4, result === 'again' ? 0 : item.familiarity + increments[result])), dueAt: new Date(Date.now() + days[result] * 86400000).toISOString(), reviewCount: item.reviewCount + 1 } : item) : current.vocabulary,
+        reviewLogs: [{ id: makeId('review'), vocabId: match ? match.id : `sentence:${sentence.id}`, result, mode: 'sentence', createdAt: new Date().toISOString() }, ...current.reviewLogs],
+      };
+    });
+  };
   // LingQ 式「导入任何文本」：粘贴文章 / .txt / .md → 可阅读、可注音、可统计的书。
   const importText = async (title: string, text: string) => {
     setImporting(true);
@@ -323,7 +337,7 @@ export default function App() {
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
   else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
-  else if (page === 'review') content = <Review entries={data.vocabulary} onReview={addReview} onBack={() => setPage('library')} />;
+  else if (page === 'review') content = <Review entries={data.vocabulary} sentences={data.sentences || []} onReview={addReview} onReviewSentence={reviewSentence} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
   else if (page === 'voice-analytics') content = <VoiceAnalytics records={data.voiceRecords} vocabulary={data.vocabulary} onPractice={() => setPage('voice-lab')} />;
   else if (page === 'notes') content = <Notes highlights={data.highlights} sentences={data.sentences || []} books={data.books} onOpenSource={openSource} onDelete={deleteHighlight} onDeleteSentence={deleteSentence} />;

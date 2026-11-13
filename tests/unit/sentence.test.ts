@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeRegExp, splitSentences, extractSentence, sentenceParts } from '../../src/lib/sentence';
+import { escapeRegExp, splitSentences, extractSentence, sentenceParts, sentenceToReviewEntry } from '../../src/lib/sentence';
 
 test('splitSentences：按句末标点切分并保留收尾引号', () => {
   const paragraph = 'He said, “Just remember.” Then he left! What next?';
@@ -52,4 +52,13 @@ test('sentenceParts：多次命中都高亮', () => {
 
 test('escapeRegExp：转义特殊字符', () => {
   assert.equal(escapeRegExp('a.b*c'), 'a\\.b\\*c');
+});
+
+test('sentenceToReviewEntry：映射为合成词条供挖空复习', () => {
+  const entry = sentenceToReviewEntry({ id: 's1', text: 'The spotlight of the mind wanders.', word: 'spotlight', meaning: '聚光灯', phonetic: 'ˈspɒtlaɪt', bookId: 'b', bookTitle: 'B', chapterId: 'c', chapterTitle: 'C', paragraphIndex: 1, createdAt: '2026-01-01T00:00:00Z' });
+  assert.equal(entry.id, 's1');
+  assert.equal(entry.word, 'spotlight');
+  assert.equal(entry.context, 'The spotlight of the mind wanders.');
+  assert.equal(entry.dictionary?.chinese, '聚光灯');
+  assert.equal(entry.dictionary?.phonetic, 'ˈspɒtlaɪt');
 });

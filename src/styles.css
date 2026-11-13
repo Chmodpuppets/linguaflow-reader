@@ -809,3 +809,5 @@ h1,h2,h3,h4,p { margin-top: 0; }
 @media(max-width:640px){.goal-strip{gap:10px}.goal-stat{min-width:46%}}
 .ideal-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
 .ideal-toggle input{accent-color:var(--accent,#7c5cff)}
+.cloze-hint{margin:10px 0 0;font-size:13px;color:var(--muted,#94a3b8)}
+.cloze-full{margin:8px 0 0;font-size:14px;line-height:1.6;color:var(--text,#e2e8f0)}

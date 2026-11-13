@@ -2,6 +2,8 @@
 // 查词面板默认只展示「包含该词的那一句」，而不是整段原文：整段太长会把释义挤出首屏，
 // 也不利于收藏。这里提供纯函数做句子切分 / 定位 / 高亮切片，便于单元测试与三产品复用。
 
+import type { SavedSentence, VocabEntry } from '../types';
+
 /** 转义正则特殊字符，保证用户词（含撇号 / 连字符）能安全进正则。 */
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -52,4 +54,28 @@ export function sentenceParts(sentence: string, word: string): { text: string; h
   }
   if (last < sentence.length) parts.push({ text: sentence.slice(last), hit: false });
   return parts.length ? parts : [{ text: sentence, hit: false }];
+}
+
+/**
+ * 把收藏的句子映射成复习用的「合成词条」，复用挖空 / 反馈渲染：
+ * context=整句、word=触发词、dictionary.chinese/meaning=收藏时释义。
+ * id 保留句子 id，便于复习页回查原句并把结果记到对应单词的 SRS。
+ */
+export function sentenceToReviewEntry(sentence: SavedSentence): VocabEntry {
+  return {
+    id: sentence.id,
+    word: sentence.word,
+    context: sentence.text,
+    bookId: sentence.bookId,
+    bookTitle: sentence.bookTitle,
+    chapterId: sentence.chapterId,
+    chapterTitle: sentence.chapterTitle,
+    paragraphIndex: sentence.paragraphIndex,
+    note: '',
+    dictionary: { word: sentence.word, phonetic: sentence.phonetic, partOfSpeech: '', meaning: sentence.meaning, chinese: sentence.meaning, usage: '', example: '', exampleCn: '', synonyms: [] },
+    createdAt: sentence.createdAt,
+    familiarity: 0,
+    dueAt: sentence.createdAt,
+    reviewCount: 0,
+  };
 }

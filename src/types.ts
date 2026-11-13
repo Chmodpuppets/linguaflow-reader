@@ -97,7 +97,7 @@ export interface ReviewLog {
   id: string;
   vocabId: string;
   result: 'again' | 'hard' | 'good' | 'easy';
-  mode: 'flashcard' | 'cloze';
+  mode: 'flashcard' | 'cloze' | 'sentence';
   createdAt: string;
 }
 

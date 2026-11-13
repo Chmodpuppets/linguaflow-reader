@@ -37,3 +37,28 @@ test('TXT 文件导入 + 每日目标可调', async ({ page }) => {
   await page.getByRole('button', { name: '提高每日目标' }).click();
   await expect(page.locator('.goal-today b')).toContainText('/6');
 });
+
+test('句子回译：收藏句子进入复习，挖空答对计入复习记录', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.goto('/');
+  await page.getByRole('button', { name: '粘贴文本' }).click();
+  await page.locator('.text-import input').fill('A Quiet Garden');
+  await page.locator('.text-import textarea').fill('Attention is a garden.\n\nThe spotlight of the mind wanders among the flowers.');
+  await page.getByRole('button', { name: '导入为可阅读的书' }).click();
+  await page.locator('.reader-page').waitFor();
+  await page.locator('.word[data-word="spotlight"]').click();
+  await page.getByRole('button', { name: '收藏句子' }).click();
+  await page.getByRole('button', { name: '返回原文' }).click();
+  await page.getByRole('button', { name: '返回书库' }).click();
+
+  await page.getByRole('button', { name: /主动复习/ }).click();
+  await page.getByRole('button', { name: '句子回译' }).click();
+  await page.getByRole('button', { name: '开始本次复习' }).click();
+  await expect(page.locator('.cloze-hint')).toContainText('聚光灯').catch(() => {});
+  await page.locator('.study-card input').fill('spotlight');
+  await page.getByRole('button', { name: '检查答案' }).click();
+  await expect(page.locator('.cloze-feedback.correct')).toBeVisible();
+  await expect(page.locator('.cloze-full')).toContainText('spotlight of the mind');
+  expect(pageErrors).toEqual([]);
+});
