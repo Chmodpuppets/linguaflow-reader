@@ -41,9 +41,10 @@ function LearningSyncCard({ onNotify }: { onNotify?: (message: string) => void }
   const [enabled, setEnabled] = useState(isSyncEnabled());
   const [token, setToken] = useState(getSyncToken());
   const [pending, setPending] = useState(pendingCount());
+  const [provider, setProvider] = useState<'pathmora' | 'linguaflow'>('pathmora');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'login' | 'register'>('register');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [busy, setBusy] = useState(false);
 
   const toggle = (on: boolean) => {
@@ -52,9 +53,11 @@ function LearningSyncCard({ onNotify }: { onNotify?: (message: string) => void }
     if (on) void flushQueue().then((r) => setPending(r.pending));
   };
   const connect = async () => {
-    if (!username.trim() || !password) { onNotify?.('请填写用户名和密码'); return; }
+    const id = username.trim();
+    if (!id || !password) { onNotify?.(provider === 'pathmora' ? '请填写邮箱和密码' : '请填写用户名和密码'); return; }
+    if (provider === 'pathmora' && !id.includes('@')) { onNotify?.('pathmora 账号使用邮箱登录'); return; }
     setBusy(true);
-    const result = await connectAccount(username.trim(), password, mode);
+    const result = await connectAccount(provider, id, password, mode);
     setBusy(false);
     if (!result.ok) { onNotify?.(result.error || '连接失败'); return; }
     setToken(getSyncToken());
@@ -78,11 +81,12 @@ function LearningSyncCard({ onNotify }: { onNotify?: (message: string) => void }
   };
 
   return <section className="settings-card glass-panel"><div className="settings-card-head"><CloudUpload size={20} /><div><h2>学习记录同步（可选）</h2><p>让 pathmora 读懂你的学习，为你制定计划。</p></div></div>
-    <p className="sync-consent">开启后，你的查词、收藏句子、跟读与复习记录会同步到你的账号，供 pathmora 制定学习计划。<strong>你的书籍文件仍只留在本设备。</strong>可随时关闭；离线时记录先存本机，联网后补传。</p>
+    <p className="sync-consent">开启后，你的查词、收藏句子、跟读与复习记录会同步到你的账号，供 pathmora 制定学习计划。统一身份<strong>以 pathmora 账号为准</strong>。<strong>你的书籍文件仍只留在本设备。</strong>可随时关闭；离线时记录先存本机，联网后补传。</p>
     <div className="setting-row"><div><strong>同步学习记录</strong><span>{enabled ? '已开启' : '默认关闭，不收集任何记录'}</span></div><Toggle checked={enabled} onChange={toggle} label="同步学习记录" /></div>
     {enabled && !token && <div className="sync-form">
-      <div className="sync-mode"><button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>创建账号</button><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>已有账号</button></div>
-      <label className="sync-field"><span>用户名</span><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" placeholder="起一个名字" /></label>
+      <div className="sync-mode"><button className={provider === 'pathmora' ? 'active' : ''} onClick={() => { setProvider('pathmora'); setMode('login'); }}>pathmora 账号</button><button className={provider === 'linguaflow' ? 'active' : ''} onClick={() => setProvider('linguaflow')}>linguaflow 账号</button></div>
+      <div className="sync-mode"><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>已有账号</button><button className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>创建账号</button></div>
+      <label className="sync-field"><span>{provider === 'pathmora' ? '邮箱' : '用户名'}</span><input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete={provider === 'pathmora' ? 'email' : 'username'} placeholder={provider === 'pathmora' ? 'you@example.com' : '起一个名字'} /></label>
       <label className="sync-field"><span>密码</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} placeholder="至少 6 位" /></label>
       <Button disabled={busy} onClick={() => void connect()}><LogIn size={16} />{busy ? '连接中…' : mode === 'register' ? '创建并连接' : '连接账号'}</Button>
     </div>}

@@ -65,13 +65,19 @@ export async function flushQueue(): Promise<{ sent: number; pending: number }> {
   }
 }
 
-/** 登录 / 注册 linguaflow 账号，拿到 token 作为学习记录身份。 */
-export async function connectAccount(username: string, password: string, mode: 'login' | 'register'): Promise<{ ok: boolean; error?: string }> {
+/** 连接账号，拿到 token 作为学习记录身份。
+ *  统一身份以 pathmora 为准：provider='pathmora' 用 pathmora 账号（email）登录，
+ *  其 token 由 linguaflow 身份桥接信任；provider='linguaflow' 为旧账号回退（username）。 */
+export async function connectAccount(provider: 'pathmora' | 'linguaflow', identifier: string, password: string, mode: 'login' | 'register'): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await fetch(`${getDictionaryBase()}/auth/${mode}`, {
+    const base = provider === 'pathmora' ? getPlanBase() : getDictionaryBase();
+    const payload = provider === 'pathmora'
+      ? { email: identifier, password, name: identifier }
+      : { username: identifier, password, language: 'en' };
+    const res = await fetch(`${base}/auth/${mode}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, language: 'en' }),
+      body: JSON.stringify(payload),
     });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.token) return { ok: false, error: body?.error || `连接失败（${res.status}）` };

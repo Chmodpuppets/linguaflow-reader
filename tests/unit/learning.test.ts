@@ -67,10 +67,18 @@ test('服务器失败保留队列待重试', async () => {
   assert.equal(r.pending, 1);
 });
 
-test('connectAccount 成功后保存 token', async () => {
+test('connectAccount(linguaflow) 成功后保存 token', async () => {
   online = true;
   fetchBody = { token: 'abc' };
-  const r = await connectAccount('user', 'pass123', 'register');
+  const r = await connectAccount('linguaflow', 'user', 'pass123', 'register');
   assert.equal(r.ok, true);
   assert.equal(getSyncToken(), 'abc');
+});
+
+test('connectAccount(pathmora) 成功后保存 token（统一身份以 pathmora 为准）', async () => {
+  online = true;
+  fetchBody = { token: 'pm-token' };
+  const r = await connectAccount('pathmora', 'reader@example.com', 'pass123', 'login');
+  assert.equal(r.ok, true);
+  assert.equal(getSyncToken(), 'pm-token');
 });

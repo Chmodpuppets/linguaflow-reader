@@ -67,6 +67,17 @@ pathmora 据此做复习调度与「今日十分钟」计划（P2），以及覆
 - 难度匹配排序：i+1（90–98%）的书优先，其余按覆盖率与 94% 的接近程度排序；无法评估的书排最后。筛选只保留 i+1。
 - 纯前端、本机计算，不上传书籍内容；无已知词时工具条隐藏（不误导）。
 
+## 账号统一（已实现 · 以 pathmora 账号为准）
+
+用户拍板：**以 pathmora 账号为准**。实现为「linguaflow 身份桥接 + reader 默认 pathmora 登录」，不移动学习数据、不破坏旧账号：
+
+- **linguaflow 桥接** `server/src/pathmoraIdp.ts`：`auth` 中间件本地 `getUserByToken` 优先（向后兼容）；未命中时把 Bearer token 交 pathmora `GET {PATHMORA_API_BASE}/auth/me` 服务端校验（5s 超时 + 5min 缓存），按 `users.external_provider='pathmora' / external_id` 映射或创建影子用户（唯一索引）。开关 `ENABLE_PATHMORA_IDP`（默认开，置 `0` 即回退纯本地）。
+- **reader** 连接默认 `pathmora`（邮箱登录，`connectAccount('pathmora', email, …)`），token 存 `lf_sync_token`；linguaflow `/learn/*` 经桥接信任该 token。保留 `linguaflow` 账号作为回退选项。
+- **数据归属**：学习数据仍在 linguaflow，按影子用户 id 归属。旧 linguaflow 账号（username，无 email 列）**不自动迁移**；如需与 pathmora 账号合并需另行数据迁移。
+- **pathmora 注册为邀请制**（`BETA_INVITE_REQUIRED`），故 reader 默认「已有账号」登录；创建 pathmora 账号需邀请码。
+- 验证：桥接隔离单测 3/3（桩 fetch + 临时 DB）；线上本地 token 200 / 坏 token 401（向后兼容）；reader 单测 45/45、E2E 全绿。
+
 ## 后续
 
-- 账号统一 / 单点登录：三产品目前为**独立账号库**（linguaflow `/auth`、pathmora 自有 Prisma 用户）。收敛 token 键名前必须先选定**统一身份提供方**（以 linguaflow 为准 / 以 pathmora 为准 / 新建共享 IdP），否则跨库混用 token 会鉴权失败。此为待用户拍板的架构决策，未擅自实现。
+- pathmora 学习大脑生产部署（`29d1cfa`，待用户授权走其 release 管线）。
+- 旧 linguaflow 账号 → pathmora 账号的数据合并迁移（可选，需用户确认）。
