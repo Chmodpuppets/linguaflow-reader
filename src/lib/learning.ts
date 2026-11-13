@@ -82,6 +82,40 @@ export async function connectAccount(username: string, password: string, mode: '
   }
 }
 
+// P2：复习计划由 pathmora 学习大脑下发（复习归 pathmora）。reader 只执行并回传结果。
+// pathmora 与 reader 不同源，计划接口独立 base；默认指向真实 pathmora 中国站 API。
+const PLAN_BASE_KEY = 'pathmora_plan_base';
+const DEFAULT_PLAN_BASE = 'https://www.pathmora.cn/api';
+export const getPlanBase = (): string => read(PLAN_BASE_KEY) || DEFAULT_PLAN_BASE;
+export const setPlanBase = (base: string) => write(PLAN_BASE_KEY, base);
+
+export interface ReaderPlanTask { word: string; misses: number; kind: 'weak' | 'reinforce' }
+export interface ReaderPlan {
+  ok: boolean;
+  generatedAt: number;
+  todayMinutes: number;
+  readingRewardMinutes: number;
+  due: ReaderPlanTask[];
+  stats: { knownCount: number; weakCount: number; savedSentences: number };
+}
+
+/** 拉取 pathmora 下发的今日复习计划。未开启 / 无 token / 不可达时返回 null（回退本地 SRS）。 */
+export async function fetchReaderPlan(): Promise<ReaderPlan | null> {
+  const token = getSyncToken();
+  if (!isSyncEnabled() || !token) return null;
+  try {
+    const res = await fetch(`${getPlanBase()}/reader/plan`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const plan = (await res.json()) as ReaderPlan;
+    return plan && Array.isArray(plan.due) ? plan : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 启动后台补传：联网恢复 + 周期性 flush。App 挂载时调用一次。 */
 export function startLearningSync() {
   if (typeof window === 'undefined') return;

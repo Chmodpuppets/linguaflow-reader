@@ -1,4 +1,4 @@
-# 学习记录同步（P1 · opt-in）
+# 学习记录同步（P1 opt-in · P2 计划下发）
 
 > 三产品学习闭环的地基。reader 是「学习现场」，只负责捕获与练习；**复习调度与学习计划归 pathmora**；linguaflow 提供账号 + 词典 + 同步底座。
 
@@ -47,7 +47,13 @@ pathmora 据此做复习调度与「今日十分钟」计划（P2），以及覆
 - 同意 UI：`src/components/Settings.tsx` `LearningSyncCard`。
 - 服务端：linguaflow `server/src/learn.ts`（`registerLearnRoutes`），表 `learn_events`。
 
+## P2 · pathmora 下发今日计划，reader 执行
+
+- **调度归 pathmora。** pathmora `server/src/readerReviewPlan.ts` `buildReaderPlan(summary)` 是纯函数：薄弱词（misses 降序）优先 + 已掌握词间隔强化，补满每组 12 词；输出 `ReaderPlan{todayMinutes:10, readingRewardMinutes:15, due[], stats}`。
+- **路由** `GET /api/reader/plan`（pathmora `server/src/readerPlanRoutes.ts`）：用 linguaflow Bearer token 服务端转取 `{LINGUAFLOW_API_BASE}/learn/summary`（账号统一前不依赖 pathmora 登录态），8s 超时；跨域 `Access-Control-Allow-Origin: *`（Bearer 无 cookie，安全）。
+- **reader 执行** `src/lib/learning.ts` `fetchReaderPlan()`（base 默认 `https://www.pathmora.cn/api`，可用 `pathmora_plan_base` 覆盖；仅开启+有 token 才请求，6s 超时）。`src/components/Review.tsx` 挂载拉取，`start()` 按 `plan.due` 词序映射本地词条；**计划不可达自动回退本地 SRS**，阅读/复习不被阻塞。setup 页 `.plan-banner` 展示「今日10分钟 + 薄弱词数 + 阅读奖励15分钟」。
+- **部署边界**：pathmora 大脑代码已本地提交（未自动部署，遵循其 DEPLOYMENT.md）；reader 执行端带优雅回退照常上线。pathmora 部署后计划即生效，无需 reader 再改。
+
 ## 后续
 
-- P2：pathmora 复习调度 + 今日十分钟；reader 复习页改为执行下发任务。
 - P3：覆盖率（书词 ∩ 已知词 / 书词，词频加权）90–98% 判 i+1 选书 + reader 难度标签。
