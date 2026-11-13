@@ -16,13 +16,13 @@ export function validateBackup(parsed: unknown): AppData {
   const num = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
   (raw.books as unknown[]).forEach((item, index) => {
     const book = item as Record<string, unknown>;
-    if (!book || !str(book.id) || !str(book.title) || !['sample', 'epub'].includes(String(book.source)) || !Array.isArray(book.chapters)) throw new Error(`第 ${index + 1} 本书的条目损坏（缺少 id / 标题 / 章节）`);
+    if (!book || !str(book.id) || !str(book.title) || !['sample', 'epub', 'text'].includes(String(book.source)) || !Array.isArray(book.chapters)) throw new Error(`第 ${index + 1} 本书的条目损坏（缺少 id / 标题 / 章节）`);
     (book.chapters as unknown[]).forEach((chapter) => {
       const ch = chapter as Record<string, unknown>;
       if (!ch || !str(ch.id) || !str(ch.title) || !Array.isArray(ch.paragraphs) || (ch.paragraphs as unknown[]).some((p) => !str(p))) throw new Error(`《${String(book.title)}》的章节数据损坏`);
     });
-    // 导入的 EPUB 必须有正文；样书正文由 hydrate 从静态内容还原，允许空 chapters。
-    if (book.source === 'epub' && !(book.chapters as unknown[]).length) throw new Error(`《${String(book.title)}》没有可阅读的章节`);
+    // 导入的 EPUB / 文本必须有正文；样书正文由 hydrate 从静态内容还原，允许空 chapters。
+    if ((book.source === 'epub' || book.source === 'text') && !(book.chapters as unknown[]).length) throw new Error(`《${String(book.title)}》没有可阅读的章节`);
   });
   (raw.vocabulary as unknown[]).forEach((item, index) => {
     const entry = item as Record<string, unknown>;

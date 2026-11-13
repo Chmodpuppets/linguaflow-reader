@@ -20,7 +20,7 @@ export interface Book {
   currentParagraph: number;
   addedAt: string;
   lastReadAt?: string;
-  source: 'sample' | 'epub';
+  source: 'sample' | 'epub' | 'text';
   /** 每页对应的扫描图路径（page number → image url）。存在即可切换「看图」模式。 */
   pageImages?: Record<number, string>;
   /** 每页 OCR 文本块坐标（Vision 归一化坐标，原点左下）。用于图片模式的点词查义。 */
@@ -108,6 +108,8 @@ export interface ReaderSettings {
   reducedAmbient: boolean;
   /** 常驻注音模式：off 关闭 / learning 仅学习中 / all 全部有释义的词。旧数据无此字段时回退 learning。 */
   annotationMode?: 'off' | 'learning' | 'all';
+  /** 每日学习目标（学习动作数：查词标记/收藏/复习/跟读）。旧数据回退 5。 */
+  dailyGoal?: number;
 }
 
 /** 词状态：new（未标记，默认）/ learning（学习中，显示注音）/ known（已掌握，移除注音）。 */

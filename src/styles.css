@@ -787,3 +787,25 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .state-btn.known.on{color:#34d399;border-color:#34d399;background:color-mix(in srgb,#34d399 12%,transparent)}
 .annotation-select{background:transparent;color:inherit;border:1px solid color-mix(in srgb,currentColor 25%,transparent);border-radius:8px;padding:4px 8px;font-size:13px}
 .annotation-select option{color:#111}
+
+/* ── LingQ 式学习仪表盘 + 文本导入 ───────────────────────────── */
+.heading-actions{display:flex;gap:10px;flex-wrap:wrap}
+.goal-strip{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;padding:16px 18px;margin-bottom:18px}
+.goal-stat{display:flex;align-items:center;gap:10px;flex:1;min-width:120px}
+.goal-stat>svg{color:var(--accent,#7c5cff);flex:none}
+.goal-stat b{display:block;font-size:20px;line-height:1.1}
+.goal-stat span{font-size:12px;opacity:.7}
+.goal-stat .progress-wrap{margin-top:6px}
+.goal-today{position:relative}
+.goal-stepper{display:flex;gap:6px;margin-left:auto}
+.goal-stepper button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;border:1px solid color-mix(in srgb,currentColor 25%,transparent);background:transparent;color:inherit;cursor:pointer}
+.goal-stepper button:hover{background:color-mix(in srgb,currentColor 10%,transparent)}
+.import-tabs{margin-bottom:14px}
+.text-import{display:flex;flex-direction:column;gap:12px}
+.text-import .field{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.text-import .field span{opacity:.75}
+.text-import input,.text-import textarea{background:color-mix(in srgb,currentColor 6%,transparent);border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:10px;color:inherit;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical}
+.text-import textarea{line-height:1.6;min-height:160px}
+@media(max-width:640px){.goal-strip{gap:10px}.goal-stat{min-width:46%}}
+.ideal-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.ideal-toggle input{accent-color:var(--accent,#7c5cff)}

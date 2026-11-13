@@ -11,6 +11,7 @@ import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
 import { getCachedKnownWords, isSyncEnabled, knownWordsStale, recordEvent, refreshKnownWords, startLearningSync } from './lib/learning';
+import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
@@ -222,8 +223,8 @@ export default function App() {
   };
   const deleteBook = async (id: string) => {
     const book = data.books.find((item) => item.id === id);
-    // 内置样书来自 STATIC_CONTENT，删了下次 hydrate 又会回来，只允许删自己导入的 EPUB。
-    if (!book || book.source !== 'epub') return;
+    // 内置样书来自 STATIC_CONTENT，删了下次 hydrate 又会回来，只允许删自己导入的 EPUB / 文本。
+    if (!book || (book.source !== 'epub' && book.source !== 'text')) return;
     const ok = await askConfirm({ title: '删除书籍', message: `确定删除《${book.title}》吗？这本书的笔记、词条、复习记录和练习记录也会一并移除。`, confirmLabel: '删除', danger: true });
     if (!ok) return;
     setData((current) => {
@@ -274,7 +275,21 @@ export default function App() {
       reviewLogs: [{ id: makeId('review'), vocabId: entry.id, result, mode, createdAt: new Date().toISOString() }, ...current.reviewLogs],
     }));
   };
+  // LingQ 式「导入任何文本」：粘贴文章 / .txt / .md → 可阅读、可注音、可统计的书。
+  const importText = async (title: string, text: string) => {
+    setImporting(true);
+    try {
+      const { buildBookFromText } = await import('./lib/textBook');
+      const book = buildBookFromText(title, '', text, makeId('book'));
+      setData((current) => ({ ...current, books: [book, ...current.books] }));
+      setActiveBookId(book.id);
+      notify(`已导入《${book.title}》，共 ${book.chapters.length} 个章节`);
+    } catch (error) { notify(error instanceof Error ? error.message : '文本导入失败，请检查内容。', 'error'); throw error; }
+    finally { setImporting(false); }
+  };
   const importBook = async (file: File) => {
+    const isText = /\.(txt|md|markdown)$/i.test(file.name) || file.type === 'text/plain' || file.type === 'text/markdown';
+    if (isText) { await importText(file.name.replace(/\.(txt|md|markdown)$/i, ''), await file.text()); return; }
     if (file.size > MAX_EPUB_BYTES) {
       const message = `文件 ${(file.size / 1048576).toFixed(0)}MB 超过 60MB 上限：EPUB 会整份解包进内存，请先拆分或换体积更小的版本。`;
       notify(message);
@@ -306,7 +321,7 @@ export default function App() {
 
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
-  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onDelete={deleteBook} importing={importing} importProgress={importProgress} />;
+  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} onReview={addReview} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
