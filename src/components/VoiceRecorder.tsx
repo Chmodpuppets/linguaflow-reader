@@ -7,6 +7,7 @@ import { diffTranscript, formatDuration, speechRecognitionFactory, voiceMetrics,
 import { DEFAULT_WHISPER_MODEL, WHISPER_MODELS, WHISPER_SOURCE_LABEL, isWhisperLoaded, isWhisperSupported, setWhisperSource, transcribeWithWhisper, warmupWhisper, whisperSource, type WhisperModelId, type WhisperProgress, type WhisperSource } from '../lib/whisper';
 import { makeId } from '../lib/utils';
 import { classifyProsody, intelligibilityGaps, wordFeaturesFromBuffer, type ProsodyWord } from '../lib/prosody';
+import { pickFocus, type FocusPoint } from '../lib/focus';
 import { Button } from './UI';
 
 type SttEngine = 'native' | 'whisper';
@@ -201,6 +202,15 @@ function ReferenceTrack({ audioUrl, bookId, targetText }: { audioUrl?: string; b
   </div>;
 }
 
+// 焦点词在目标文本里高亮（首个整词命中），让「下一轮只盯它」看得见。
+function highlightWord(text: string, word: string) {
+  const re = new RegExp(`(^|[^a-zA-Z'])(${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[^a-zA-Z']|$)`, 'i');
+  const m = re.exec(text);
+  if (!m) return text;
+  const start = m.index + m[1].length;
+  return <>{text.slice(0, start)}<mark className="focus-mark">{text.slice(start, start + m[2].length)}</mark>{text.slice(start + m[2].length)}</>;
+}
+
 export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, noteId, hideTarget = false, maxDuration = 0, challengeWords = [], onActivateWord, onSave, onActiveChange, compact = false }: {
   targetText: string;
   mode: VoiceMode;
@@ -256,6 +266,9 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
   const [source, setSource] = useState<WhisperSource>(whisperSource);
   const [whisper, setWhisper] = useState<WhisperProgress | null>(null);
   const [prosody, setProsody] = useState<ProsodyWord[] | null>(null);
+  const [nextFocus, setNextFocus] = useState<FocusPoint | null>(null);
+  const focus = useMemo(() => result ? pickFocus({ tokens: result.diffTokens, prosody, pauseRatioPct: result.metrics.pauseRatio, fillerCount: result.metrics.fillerCount }) : null, [result, prosody]);
+  useEffect(() => { setNextFocus(null); }, [result]);
   const engineRef = useRef<SttEngine>(engine);
   const modelRef = useRef<WhisperModelId>(model);
 
@@ -643,8 +656,9 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
     </div>
     <div className={`voice-target ${hideTarget && !result ? 'hidden-target' : ''}`}>
       <span className="eyebrow">{hideTarget && !result ? 'TEXT HIDDEN · RETELL FROM MEMORY' : 'TARGET TEXT'}</span>
-      <p>{hideTarget && !result ? '原段落已隐藏。用你自己的话说出大意，不必逐字复述。' : targetText || '自由表达，没有标准答案。试着让意思完整、句子清楚。'}</p>
+      <p>{hideTarget && !result ? '原段落已隐藏。用你自己的话说出大意，不必逐字复述。' : (nextFocus?.word && targetText ? highlightWord(targetText, nextFocus.word) : (targetText || '自由表达，没有标准答案。试着让意思完整、句子清楚。'))}</p>
     </div>
+    {nextFocus && <div className="focus-reminder"><span className="eyebrow">NEXT ROUND · ONE THING</span><strong>下一轮只盯：{nextFocus.title}</strong><span>{nextFocus.advice}</span></div>}
     {(recording || transcript || whisper?.phase === 'transcribing') && <div className="live-transcript"><span>{engine === 'native' ? 'REAL-TIME TRANSCRIPT' : 'WHISPER TRANSCRIPT'}</span><p>{transcript || (engine === 'native' ? '正在等待语音识别…' : '录音已结束，本地模型正在转写…')}</p></div>}
     {error && <div className="voice-error">{error}</div>}
     <div className="record-actions">
@@ -655,6 +669,7 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
     </div>
     {result && <div className="voice-result page-enter">
       <div className="metric-grid"><div><span>有效语速</span><strong>{result.metrics.wpm}<small>WPM</small></strong></div><div><span>卡顿占比</span><strong>{result.metrics.pauseRatio}<small>%</small></strong></div><div><span>{mode === 'freetalk' ? '开口词数' : '词级匹配'}</span><strong>{mode === 'freetalk' ? result.metrics.wordCount : result.metrics.accuracy}<small>{mode === 'freetalk' ? '词' : '%'}</small></strong></div><div><span>口头禅</span><strong>{result.metrics.fillerCount}<small>次</small></strong></div></div>
+      {focus && <div className="focus-card"><span className="eyebrow">ONE THING AT A TIME</span><strong>{focus.title}</strong><p>{focus.advice}</p><div className="panel-actions"><Button size="sm" onClick={() => setNextFocus(focus)}>下一轮只练这个</Button>{focus.word && <Button size="sm" variant="secondary" onClick={() => speakWords(focus.word!)}><Volume2 size={15} />听这个词</Button>}</div></div>}
       {result.diffTokens.length > 0 && <div className="diff-panel"><div className="diff-legend"><span><i className="green" />匹配</span><span><i className="yellow" />低置信度</span><span><i className="red" />漏读 / 替换</span></div><div className="diff-tokens">{result.diffTokens.map((token, index) => <button key={`${token.text}-${index}`} className={`diff-${token.status}`} title={token.spoken ? `识别为：${token.spoken}` : '这个词没有被识别到'} onClick={() => { if (!('speechSynthesis' in window)) return; const utterance = new SpeechSynthesisUtterance(token.text); utterance.lang = 'en-US'; window.speechSynthesis.speak(utterance); }}>{token.text}</button>)}</div><p>点击词可听标准音。词级 Diff 来自 STT 对齐，不等同于音素评分。</p></div>}
       {gaps.length > 0 && <div className="intelligibility-panel"><div className="panel-head"><span className="eyebrow">INTELLIGIBILITY</span><strong>有 {gaps.length} 个词可能没被听懂</strong></div><ul className="intelligibility-list">{gaps.map((gap, index) => <li key={`${gap.word}-${index}`}><button className="gap-word" onClick={() => speakWords(gap.word)} title="听标准音">{gap.word}</button><span className="gap-note">{gap.kind === 'substitute' ? `识别成了 “${gap.spoken}”` : '未识别到'}</span></li>)}</ul><div className="panel-actions"><Button size="sm" variant="secondary" onClick={() => speakWords(gaps.map((g) => g.word).join(', '))}><Volume2 size={15} />听标准音</Button><span className="panel-hint">重录时重点读这些词。这是「机器可能没听清」，不是「你读错了」。</span></div></div>}
       {prosody && prosody.length > 0 && <div className="prosody-panel"><div className="panel-head"><span className="eyebrow">PROSODY · 节奏对比</span><strong>重音与拖长</strong></div><div className="prosody-row"><span className="prosody-label">TARGET</span><div className="prosody-words">{prosody.map((p, i) => <span key={`t-${p.word}-${i}`} className="prosody-word target">{p.word}</span>)}</div></div><div className="prosody-row"><span className="prosody-label">YOURS</span><div className="prosody-words">{prosody.map((p, i) => <span key={`u-${p.word}-${i}`} className={`prosody-word ${p.status}`} title={p.status === 'weak' ? '该重读却弱读' : p.status === 'long' ? '该弱读却拖长' : '节奏匹配'}>{p.word}</span>)}</div></div><div className="diff-legend"><span><i className="green" />节奏匹配</span><span><i className="yellow" />弱读拖长</span><span><i className="red" />重音缺失</span></div><p>节奏相似度，不等同于发音正确度。</p></div>}
