@@ -53,7 +53,7 @@ pathmora 据此做复习调度与「今日十分钟」计划（P2），以及覆
 - **路由** `GET /api/reader/plan`（pathmora `server/src/readerPlanRoutes.ts`）：用 linguaflow Bearer token 服务端转取 `{LINGUAFLOW_API_BASE}/learn/summary`（账号统一前不依赖 pathmora 登录态），8s 超时；跨域 `Access-Control-Allow-Origin: *`（Bearer 无 cookie，安全）。
 - **reader 执行** `src/lib/learning.ts` `fetchReaderPlan()`（base 默认 `https://www.pathmora.cn/api`，可用 `pathmora_plan_base` 覆盖；仅开启+有 token 才请求，6s 超时）。`src/components/Review.tsx` 挂载拉取，`start()` 按 `plan.due` 词序映射本地词条。setup 页 `.plan-banner` 展示「今日10分钟 + 薄弱词数 + 阅读奖励15分钟」。
 - **三级降级**：pathmora 计划优先（`source:'pathmora'`）→ 不可达时 `fetchFallbackPlan()` 用已部署的 linguaflow `/learn/summary` 本地排程（薄弱词优先+已知词强化，`source:'fallback'`，横幅标「本地计划·连接 pathmora 后自动升级」）→ 两者都不可达才回退纯本地 SRS。阅读/复习全程不被阻塞；**调度权威仍归 pathmora**，fallback 仅为离线/未部署期的连续性。
-- **部署边界**：pathmora 大脑代码已本地提交（未自动部署，遵循其 DEPLOYMENT.md）；reader 执行端带优雅回退照常上线。pathmora 部署后计划即生效，无需 reader 再改。
+- **部署（已上线）**：pathmora 大脑以**独立微服务**部署（`systemd pathmora-reader-plan.service`，127.0.0.1:3010；Caddy `handle /api/reader/plan*` 路由），不重编主产品（其 release 存在 src/schema 漂移），主产品零影响、可独立手动回滚。详见 pathmora `server/READER_PLAN_DEPLOY.md`。reader `fetchReaderPlan()` 在生产即取 `source:'pathmora'`；微服务不可达时自动降级。此部署不改变主产品 `releaseReady` 门槛。
 
 ## P3 · 覆盖率难度匹配（选书 + 难度标签）
 
@@ -80,5 +80,5 @@ pathmora 据此做复习调度与「今日十分钟」计划（P2），以及覆
 
 ## 后续
 
-- pathmora 学习大脑生产部署（`29d1cfa`，待用户授权走其 release 管线）。
-- 旧 linguaflow 账号 → pathmora 账号的数据合并迁移（可选，需用户确认）。
+- 旧 linguaflow 账号 → pathmora 账号的数据合并迁移：经只读评估**当前无必要**（44 本地账号 / 0 影子 / 无 email 列 / 仅 4 条测试事件）；如未来产生真实跨账号数据再议。
+- 主产品 release 的 src/schema 漂移修复后，可把大脑路由并回主 `index.ts`（当前由独立微服务承担，二者等价）。
