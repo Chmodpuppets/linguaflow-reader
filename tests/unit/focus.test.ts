@@ -5,7 +5,7 @@ import type { DiffToken } from '../../src/types';
 import type { ProsodyWord } from '../../src/lib/prosody';
 
 const tok = (text: string, status: DiffToken['status'], spoken?: string): DiffToken => ({ text, status, spoken, confidence: 1 });
-const pw = (word: string, status: ProsodyWord['status']): ProsodyWord => ({ word, status, energy: 0.5, voiced: 0.5 });
+const pw = (word: string, status: ProsodyWord['status']): ProsodyWord => ({ word, status });
 
 test('pickFocus：漏读优先于重音弱', () => {
   const f = pickFocus({ tokens: [tok('world', 'missing')], prosody: [pw('world', 'weak')] });

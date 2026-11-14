@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Undo2 } from 'lucide-react';
 import AppShell from './components/AppShell';
 import { ConfirmDialog } from './components/UI';
 import Library from './components/Library';
@@ -77,7 +77,7 @@ export default function App() {
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error'; undo?: () => void } | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [storageChannel, setStorageChannel] = useState<StorageChannel>('indexeddb');
   const saveTimer = useRef<number | null>(null);
@@ -177,10 +177,11 @@ export default function App() {
   }, [data, ready]);
 
   // 清掉上一条的定时器：否则前一条的 3200ms 到期会提前清掉后一条 toast。
-  const notify = (message: string, tone: 'success' | 'error' = 'success') => {
+  const notify = (message: string, tone: 'success' | 'error' = 'success', undo?: () => void) => {
     window.clearTimeout(toastTimer.current);
-    setToast({ message, tone });
-    toastTimer.current = window.setTimeout(() => setToast(null), 3200);
+    setToast({ message, tone, undo });
+    // 带撤销的提示停留更久，给用户足够的反悔窗口。
+    toastTimer.current = window.setTimeout(() => setToast(null), undo ? 6000 : 3200);
   };
   const askConfirm = (options: { title: string; message: string; confirmLabel?: string; danger?: boolean }) => new Promise<boolean>((resolve) => { setConfirmState({ ...options, resolve }); });
   const closeConfirm = (ok: boolean) => { confirmState?.resolve(ok); setConfirmState(null); };
@@ -207,7 +208,10 @@ export default function App() {
   };
   const deleteSentence = async (id: string) => {
     const ok = await askConfirm({ title: '删除收藏句子', message: '确定从句子收藏里移除这句话吗？', confirmLabel: '删除', danger: true });
-    if (ok) setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
+    if (!ok) return;
+    const removed = (data.sentences || []).find((item) => item.id === id);
+    setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
+    if (removed) notify('已删除收藏句子', 'success', () => setData((current) => ({ ...current, sentences: [removed, ...(current.sentences || []).filter((item) => item.id !== id)] })));
   };
   // 词状态 + 常驻注音释义缓存：标记学习中/已掌握时写入，阅读页据此渲染 ruby 与覆盖率。
   const setWordState = (word: string, state: WordState, gloss?: WordGloss) => setData((current) => ({
@@ -217,7 +221,21 @@ export default function App() {
   }));
   const deleteVocab = async (id: string) => {
     const ok = await askConfirm({ title: '删除词条', message: '确定删除这个词条吗？原文和复习记录也会从词汇本移除。', confirmLabel: '删除', danger: true });
-    if (ok) setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
+    if (!ok) return;
+    const removed = data.vocabulary.find((entry) => entry.id === id);
+    const removedLogs = data.reviewLogs.filter((log) => log.vocabId === id);
+    setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
+    if (removed) notify('已删除词条', 'success', () => setData((current) => ({ ...current, vocabulary: [removed, ...current.vocabulary.filter((entry) => entry.id !== id)], reviewLogs: [...removedLogs, ...current.reviewLogs] })));
+  };
+  const deleteVocabMany = async (ids: string[]) => {
+    if (!ids.length) return;
+    const ok = await askConfirm({ title: '批量删除词条', message: `确定删除选中的 ${ids.length} 个词条吗？它们的复习记录也会一并移除。`, confirmLabel: '删除', danger: true });
+    if (!ok) return;
+    const idSet = new Set(ids);
+    const removed = data.vocabulary.filter((entry) => idSet.has(entry.id));
+    const removedLogs = data.reviewLogs.filter((log) => idSet.has(log.vocabId));
+    setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => !idSet.has(entry.id)), reviewLogs: current.reviewLogs.filter((log) => !idSet.has(log.vocabId)) }));
+    notify(`已删除 ${removed.length} 个词条`, 'success', () => setData((current) => ({ ...current, vocabulary: [...removed, ...current.vocabulary.filter((entry) => !idSet.has(entry.id))], reviewLogs: [...removedLogs, ...current.reviewLogs] })));
   };
   const deleteBook = async (id: string) => {
     const book = data.books.find((item) => item.id === id);
@@ -245,7 +263,11 @@ export default function App() {
     if (activeBookId === id) { setActiveBookId(null); setPage('library'); }
     notify(`已删除《${book.title}》`);
   };
-  const deleteHighlight = (id: string) => setData((current) => ({ ...current, highlights: current.highlights.filter((item) => item.id !== id) }));
+  const deleteHighlight = (id: string) => {
+    const removed = data.highlights.find((item) => item.id === id);
+    setData((current) => ({ ...current, highlights: current.highlights.filter((item) => item.id !== id) }));
+    if (removed) notify('已删除标记', 'success', () => setData((current) => ({ ...current, highlights: [removed, ...current.highlights.filter((item) => item.id !== id)] })));
+  };
   // 返回落盘结果：VoiceRecorder 据此决定是否显示「已保存」，写失败不再谎报成功。
   const saveVoiceRecord = async (record: VoiceRecord, audio: Blob): Promise<boolean> => {
     // 先确保录音 Blob 落盘，再计入统计：写失败时不产生「有记录无音频」的孤儿。
@@ -334,7 +356,7 @@ export default function App() {
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
   else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} />;
-  else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} />;
+  else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} onBulkDelete={deleteVocabMany} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} sentences={data.sentences || []} onReview={addReview} onReviewSentence={reviewSentence} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
   else if (page === 'voice-analytics') content = <VoiceAnalytics records={data.voiceRecords} vocabulary={data.vocabulary} onPractice={() => setPage('voice-lab')} />;
@@ -346,5 +368,5 @@ export default function App() {
     downloadJson(`linguaflow-reader-${new Date().toISOString().slice(0, 10)}.json`, data);
   }} onImport={restore} onNotify={notify} />;
 
-  return <div className={data.settings.reducedAmbient ? 'reduce-ambient' : ''}><AppShell page={page} onNavigate={(target) => { setActiveBookId(null); setPage(target); }} vocabCount={data.vocabulary.length} dueCount={dueCount} online={online}><Suspense fallback={<div className="route-loading"><div className="loading-line"><span /></div><p>正在载入…</p></div>}>{content}</Suspense></AppShell>{confirmState && <ConfirmDialog title={confirmState.title} message={confirmState.message} confirmLabel={confirmState.confirmLabel} danger={confirmState.danger} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}{toast && <div className={`toast glass-panel ${toast.tone === 'error' ? 'toast-error' : ''}`} role="status" aria-live="polite">{toast.tone === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}<span>{toast.message}</span></div>}</div>;
+  return <div className={data.settings.reducedAmbient ? 'reduce-ambient' : ''}><AppShell page={page} onNavigate={(target) => { setActiveBookId(null); setPage(target); }} vocabCount={data.vocabulary.length} dueCount={dueCount} online={online}><Suspense fallback={<div className="route-loading"><div className="loading-line"><span /></div><p>正在载入…</p></div>}>{content}</Suspense></AppShell>{confirmState && <ConfirmDialog title={confirmState.title} message={confirmState.message} confirmLabel={confirmState.confirmLabel} danger={confirmState.danger} onConfirm={() => closeConfirm(true)} onCancel={() => closeConfirm(false)} />}{toast && <div className={`toast glass-panel ${toast.tone === 'error' ? 'toast-error' : ''}`} role="status" aria-live="polite">{toast.tone === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}<span>{toast.message}</span>{toast.undo && <button className="toast-undo" onClick={() => { window.clearTimeout(toastTimer.current); toast.undo?.(); setToast(null); }}><Undo2 size={14} />撤销</button>}</div>}</div>;
 }

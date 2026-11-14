@@ -36,14 +36,15 @@ test('difficultyBand 分档边界：90–98 为 i+1 理想区间', () => {
 });
 
 test('bookDifficulty 已知词为空返回 null；否则给覆盖率+分档', () => {
-  const book = { id: 'b1', chapters: [{ paragraphs: ['Curiosity thrives. Curiosity grows.'] }] };
+  const book = { id: 'b1', chapters: [{ id: 'c1', title: 'Ch1', paragraphs: ['Curiosity thrives. Curiosity grows.'] }] };
   assert.equal(bookDifficulty(book, new Set()), null);
   const diff = bookDifficulty(book, new Set(['curiosity']));
   assert.ok(diff);
-  // curiosity x2 / (curiosity x2 + thrives + grows + thrives? ) 计算：curiosity2 thrives1 grows1 => 2/4=50
+  // curiosity x2 / (curiosity2 + thrives1 + grows1) = 2/4 = 50
   assert.equal(diff.coverage, 50);
   assert.equal(diff.band.key, 'hard');
   const all = bookDifficulty(book, new Set(['curiosity', 'thrives', 'grows']));
+  assert.ok(all);
   assert.equal(all.coverage, 100);
   assert.equal(all.band.key, 'easy');
 });
