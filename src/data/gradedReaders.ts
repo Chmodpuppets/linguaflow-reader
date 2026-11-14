@@ -116,7 +116,37 @@ export const gradedBooks: Book[] = [
       "'You are like these sticks,' he said. 'United you are strong; divided you are weak.'",
     ],
   ),
-  // 改写经典：把用户正在读的原著《了不起的盖茨比》（公版）开头改写到 B2，
+  // 改写经典①：《爱丽丝漫游奇境》（公版）开头改写到 B1，
+  // 作为寓言→长篇原著之间的第一座经典桥，熟悉的故事降低长篇恐惧。
+  {
+    id: 'graded-b1-alice',
+    title: "Alice's Adventures in Wonderland (Graded Bridge)",
+    author: 'Lewis Carroll · 分级改写',
+    description: '经典桥：把《爱丽丝漫游奇境》开头改写到 B1，从寓言过渡到长篇原著。',
+    cover: 'B1 · ALICE',
+    accent: '#f472b6',
+    progress: 0,
+    currentChapter: 0,
+    currentParagraph: 0,
+    addedAt: '2026-11-14T08:00:00.000Z',
+    source: 'sample',
+    level: 'B1',
+    chapters: [{
+      id: 'graded-b1-alice-1',
+      title: 'Down the Rabbit-Hole',
+      paragraphs: [
+        'Alice was beginning to get very tired of sitting by her sister on the bank, and of having nothing to do.',
+        'Once or twice she looked into the book her sister was reading, but it had no pictures or conversations in it.',
+        "'And what is the use of a book,' thought Alice, 'without pictures or conversations?'",
+        'She was considering whether the pleasure of making a daisy chain would be worth the trouble of getting up and picking the daisies.',
+        'Suddenly a White Rabbit with pink eyes ran close by her.',
+        'When the Rabbit actually took a watch out of its waistcoat pocket and looked at it, Alice started to her feet.',
+        'Burning with curiosity, she ran across the field after it, and was just in time to see it pop down a large rabbit-hole under the hedge.',
+        'In another moment down went Alice after it, never once considering how in the world she was to get out again.',
+      ],
+    }],
+  },
+  // 改写经典②：把用户正在读的原著《了不起的盖茨比》（公版）开头改写到 B2，
   // 作为「分级桥→原著」的最后一阶，读完即可无缝进入原著 Chapter 1。
   book(
     'graded-b2-gatsby',
@@ -201,4 +231,12 @@ export const gradedGlosses: Record<string, WordGloss> = {
   dock: { zh: '码头' },
   invented: { zh: '虚构' },
   refused: { zh: '拒绝' },
+  bank: { zh: '河岸' },
+  conversations: { zh: '对话' },
+  pleasure: { zh: '乐趣' },
+  daisy: { zh: '雏菊' },
+  considering: { zh: '考虑' },
+  waistcoat: { zh: '马甲' },
+  curiosity: { zh: '好奇心' },
+  hedge: { zh: '树篱' },
 };

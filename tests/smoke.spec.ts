@@ -8,7 +8,7 @@ test('首页加载：7 项导航齐全、书库可见、无未捕获异常', asy
 
   await expect(page.locator('.main-nav .nav-item')).toHaveCount(7);
   await expect(page.locator('.library-page')).toBeVisible();
-  await expect(page.locator('.book-card')).toHaveCount(10);
+  await expect(page.locator('.book-card')).toHaveCount(11);
   expect(pageErrors).toEqual([]);
 });
 

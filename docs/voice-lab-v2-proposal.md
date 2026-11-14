@@ -90,7 +90,7 @@ YOURS   "the world is not FINISHED being interesting"
 - **功能**：把 diff 里的 `substitute` / `missing` 词显式呈现为「这里可能没被听懂」，引导重读；进阶版用 Whisper 的 token logprob 给置信度。
 - **技术可行性**：
   - 简单档 ✅ 现在就能做（复用现有 diff 的 substitute/missing）。
-  - 进阶档 🟡 需验证 `@huggingface/transformers` 是否暴露 token 级 logprob（whisper generate 的 `output_scores`）。
+  - 进阶档 ⛔ 已验证（2026-11-14）：`@huggingface/transformers@4.3.2` 的 whisper pipeline 只输出 text/chunks/word-timestamps，**不暴露 token 级 logprob**（dist 中无 `output_scores`/`return_dict_in_generate` 生成_scores 通道；`confidence` 仅见于说话人分离/CTC 模型）。按原规格不可行，除非自写 generate 取 logits——成本高、收益不确定，**暂缓**。简单档（diff substitute/missing）已足够诚实可用。
 - **诚实边界**：文案是「机器可能没听清」，不是「你读错了」。
 
 ```
