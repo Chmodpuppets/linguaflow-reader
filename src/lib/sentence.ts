@@ -18,6 +18,22 @@ export function splitSentences(paragraph: string): string[] {
   return matches.map((sentence) => sentence.trim()).filter(Boolean);
 }
 
+/**
+ * 把「一整章挤成一段」的超长块拆成可读的自然段：超过 maxChars 的段落按句子
+ * 每 perGroup 句一组切开。用于导入文本 / EPUB 回退路径，保证不会出现单段巨墙。
+ * 正常多段内容不受影响（短段原样保留）。
+ */
+export function breakLongParagraphs(paragraphs: string[], maxChars = 700, perGroup = 3): string[] {
+  const out: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (paragraph.length <= maxChars) { out.push(paragraph); continue; }
+    const sentences = splitSentences(paragraph);
+    if (sentences.length <= 1) { out.push(paragraph); continue; }
+    for (let i = 0; i < sentences.length; i += perGroup) out.push(sentences.slice(i, i + perGroup).join(' '));
+  }
+  return out.filter(Boolean);
+}
+
 function wordBoundary(word: string): RegExp {
   return new RegExp(`(^|[^a-zA-Z])${escapeRegExp(word)}([^a-zA-Z]|$)`, 'i');
 }

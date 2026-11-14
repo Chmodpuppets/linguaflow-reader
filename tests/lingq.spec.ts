@@ -25,6 +25,32 @@ test('粘贴文本导入为书，标记已掌握后仪表盘已知词 +1', async
   expect(pageErrors).toEqual([]);
 });
 
+test('每行一段的粘贴文本不再并成一坨（单段落修复）', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.goto('/');
+  const line = (n: number) => `This is paragraph number ${n} and it is long enough to be treated as its own natural paragraph in the reader.`;
+  await page.getByRole('button', { name: '粘贴文本' }).click();
+  await page.locator('.text-import input').fill('Line Paragraphs');
+  await page.locator('.text-import textarea').fill([line(1), line(2), line(3)].join('\n'));
+  await page.getByRole('button', { name: '导入为可阅读的书' }).click();
+  await expect(page.locator('.reader-page')).toBeVisible();
+  await expect(page.locator('.chapter-body p')).toHaveCount(3);
+  expect(pageErrors).toEqual([]);
+});
+
+test('超长单段导入被拆成多个可读段', async ({ page }) => {
+  await page.goto('/');
+  const long = Array.from({ length: 40 }, (_, i) => `Sentence ${i} goes here.`).join(' ');
+  await page.getByRole('button', { name: '粘贴文本' }).click();
+  await page.locator('.text-import input').fill('Wall');
+  await page.locator('.text-import textarea').fill(long);
+  await page.getByRole('button', { name: '导入为可阅读的书' }).click();
+  await expect(page.locator('.reader-page')).toBeVisible();
+  const count = await page.locator('.chapter-body p').count();
+  expect(count).toBeGreaterThan(1);
+});
+
 test('TXT 文件导入 + 每日目标可调', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '导入 EPUB' }).click();

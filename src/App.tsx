@@ -14,6 +14,7 @@ import { downloadJson, makeId } from './lib/utils';
 import { getCachedKnownWords, isSyncEnabled, knownWordsStale, recordEvent, refreshKnownWords, startLearningSync } from './lib/learning';
 import { computeKnownWords } from './lib/knownWords';
 import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
+import { breakLongParagraphs } from './lib/sentence';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
@@ -56,7 +57,11 @@ function hydrateBooks(books: Book[]): Book[] {
   return books.map((book) => {
     const full = STATIC_CONTENT.get(book.id);
     // 扫描书的正文是异步 chunk：还没到位时先给个空壳，保证书库列表不会因缺 chapters 崩溃
-    if (!full) return Array.isArray(book.chapters) ? book : { ...book, chapters: [] };
+    if (!full) {
+      if (!Array.isArray(book.chapters)) return { ...book, chapters: [] };
+      // 旧版导入可能把整章存成单段：加载时拆超长块，修复「一本书就一段话」。
+      return { ...book, chapters: book.chapters.map((chapter) => ({ ...chapter, paragraphs: breakLongParagraphs(chapter.paragraphs || []) })) };
+    }
     // 以静态书打底（保证默认字段齐全），再用持久化数据覆盖（保留用户改过的元数据），
     // 最后把 slimForStorage 剥掉的 4 个大字段补回来。老写法只用 6 个字段重建，
     // 会把 accent / cover / description 等自定义值悄悄丢掉。

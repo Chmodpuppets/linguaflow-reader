@@ -1,4 +1,5 @@
 import type { Book, Chapter } from '../types';
+import { breakLongParagraphs } from './sentence';
 
 const ACCENTS = ['#7c5cff', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#ec4899'];
 
@@ -20,6 +21,19 @@ function blocksToParagraphs(lines: string[]): string[] {
 }
 
 interface RawChapter { title: string; lines: string[] }
+
+/** 段落化：空行分段优先；若整章被并成一段且源是「每行一段」（行均较长），按行还原；最后拆超长块。 */
+function paragraphsFromLines(lines: string[]): string[] {
+  const base = blocksToParagraphs(lines);
+  if (base.length === 1) {
+    const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
+    if (nonEmpty.length > 1) {
+      const avg = nonEmpty.reduce((n, line) => n + line.length, 0) / nonEmpty.length;
+      if (avg >= 60) return breakLongParagraphs(nonEmpty);
+    }
+  }
+  return breakLongParagraphs(base);
+}
 
 /** 优先按 Markdown 标题（# / ## / ###）或「第X章/Chapter N」分章；否则整体按段落数切块。 */
 function splitChapters(text: string, fallbackTitle: string): RawChapter[] {
@@ -64,7 +78,7 @@ export function buildBookFromText(title: string, author: string, text: string, i
   const chapters: Chapter[] = raw.map((chapter, index) => ({
     id: `${id}-ch-${index}`,
     title: chapter.title || `Section ${index + 1}`,
-    paragraphs: blocksToParagraphs(chapter.lines),
+    paragraphs: paragraphsFromLines(chapter.lines),
   })).filter((chapter) => chapter.paragraphs.length > 0);
   if (!chapters.length) throw new Error('未能从文本中提取出正文段落');
   return {

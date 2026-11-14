@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeRegExp, splitSentences, extractSentence, sentenceParts, sentenceToReviewEntry } from '../../src/lib/sentence';
+import { escapeRegExp, splitSentences, extractSentence, sentenceParts, sentenceToReviewEntry, breakLongParagraphs } from '../../src/lib/sentence';
 
 test('splitSentences：按句末标点切分并保留收尾引号', () => {
   const paragraph = 'He said, “Just remember.” Then he left! What next?';
@@ -61,4 +61,21 @@ test('sentenceToReviewEntry：映射为合成词条供挖空复习', () => {
   assert.equal(entry.context, 'The spotlight of the mind wanders.');
   assert.equal(entry.dictionary?.chinese, '聚光灯');
   assert.equal(entry.dictionary?.phonetic, 'ˈspɒtlaɪt');
+});
+
+test('breakLongParagraphs：短段原样保留', () => {
+  assert.deepEqual(breakLongParagraphs(['One short paragraph.', 'Another one.']), ['One short paragraph.', 'Another one.']);
+});
+
+test('breakLongParagraphs：超长单段按每3句拆成多段', () => {
+  const long = Array.from({ length: 9 }, (_, i) => `Sentence number ${i} is here and it contains quite a few additional words to push the length up.`).join(' ');
+  const out = breakLongParagraphs([long]);
+  assert.ok(out.length === 3, `expected 3 groups, got ${out.length}`);
+  assert.ok(out.every((p) => p.length <= 700));
+  assert.ok(out[0].startsWith('Sentence number 0'));
+});
+
+test('breakLongParagraphs：无句末标点的超长块不硬拆', () => {
+  const long = 'word '.repeat(300).trim();
+  assert.deepEqual(breakLongParagraphs([long]), [long]);
 });

@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import type { Book, Chapter } from '../types';
+import { breakLongParagraphs } from './sentence';
 
 function parseXml(source: string, mime: DOMParserSupportedType = 'application/xml'): Document {
   const document = new DOMParser().parseFromString(source, mime);
@@ -100,10 +101,16 @@ function extractChapter(html: Document, root?: Element): { heading?: string; par
     }
   }
   if (!paragraphs.length) {
-    const bodyText = (root || html.body)?.textContent?.replace(/\s+/g, ' ').trim() || '';
-    if (bodyText.length > 40) paragraphs.push(bodyText);
+    // 无块级标签的书：先按换行还原自然段，再拆超长块，避免整章成一坨。
+    const raw = (root || html.body)?.textContent || '';
+    const byLine = raw.split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter((line) => line.length >= 2);
+    if (byLine.length) paragraphs.push(...byLine);
+    else {
+      const bodyText = raw.replace(/\s+/g, ' ').trim();
+      if (bodyText.length > 40) paragraphs.push(bodyText);
+    }
   }
-  return { heading, paragraphs };
+  return { heading, paragraphs: breakLongParagraphs(paragraphs) };
 }
 
 /**

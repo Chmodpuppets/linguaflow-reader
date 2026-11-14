@@ -11,6 +11,19 @@ test('buildBookFromText：空行分段、单换行合并、source=text', () => {
   assert.deepEqual(book.chapters[0].paragraphs, ['Hello world this is one paragraph.', 'Second paragraph here.']);
 });
 
+test('buildBookFromText：每行一段（单换行、行较长）还原为多段而非一坨', () => {
+  const line = (n: number) => `This is paragraph number ${n} and it is long enough to be treated as its own natural paragraph here.`;
+  const text = [line(1), line(2), line(3)].join('\n');
+  const book = buildBookFromText('Lines', '', text, 'b5');
+  assert.equal(book.chapters[0].paragraphs.length, 3);
+});
+
+test('buildBookFromText：超长单段被拆成多个可读段', () => {
+  const long = Array.from({ length: 40 }, (_, i) => `Sentence ${i} goes here.`).join(' ');
+  const book = buildBookFromText('Wall', '', long, 'b6');
+  assert.ok(book.chapters[0].paragraphs.length > 1);
+});
+
 test('buildBookFromText：Markdown 标题分章', () => {
   const book = buildBookFromText('', '', '# Chapter One\n\nAlpha beta.\n\n## Chapter Two\n\nGamma delta.', 'b2');
   assert.equal(book.chapters.length, 2);
