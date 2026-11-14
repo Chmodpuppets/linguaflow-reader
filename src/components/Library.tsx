@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen, BookOpenCheck, Clock3, Compass, FileUp, Flame, Im
 import type { Book } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 import { readingMinutes } from '../lib/utils';
-import { bookDifficulty, recommendBook } from '../lib/difficulty';
+import { bookDifficulty, coldStartPick, recommendBook } from '../lib/difficulty';
 import type { ImportProgress } from '../lib/epub';
 
 export interface LibraryStats { known: number; learning: number; streak: number; today: number; goal: number }
@@ -32,6 +32,7 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
   const diffs = useMemo(() => new Map(books.map((book) => [book.id, bookDifficulty(book, knownSet)])), [books, knownSet]);
   const canMatch = knownSet.size > 0;
   const recommendation = useMemo(() => recommendBook(books, knownSet), [books, knownSet]);
+  const coldStart = useMemo(() => (knownSet.size ? null : coldStartPick(books)), [books, knownSet]);
   const displayed = useMemo(() => {
     let list = filtered;
     if (canMatch && onlyIdeal) list = list.filter((book) => diffs.get(book.id)?.band.ideal);
@@ -68,6 +69,11 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       <div className="recommend-icon"><Compass size={20} /></div>
       <div className="recommend-copy"><span className="section-kicker">TODAY'S PICK · 今日推荐</span><h2>{recommendation.book.title}</h2><p>{recommendation.reason}</p></div>
       <div className="recommend-action"><span className={`difficulty-badge band-${recommendation.band.key}`}>{recommendation.band.label} · {recommendation.coverage}%</span><Button onClick={() => onOpen(recommendation.book)}>{recommendation.book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={16} /></Button></div>
+    </section>}
+    {!recommendation && coldStart && <section className="recommend-card cold-start glass-panel" aria-label="入门推荐">
+      <div className="recommend-icon"><Compass size={20} /></div>
+      <div className="recommend-copy"><span className="section-kicker">START HERE · 入门推荐</span><h2>{coldStart.book.title}</h2><p>{coldStart.reason}</p></div>
+      <div className="recommend-action">{coldStart.book.level && <span className="level-badge">{coldStart.book.level}</span>}<Button onClick={() => onOpen(coldStart.book)}>{coldStart.book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={16} /></Button></div>
     </section>}
     {recent && <section className="continue-card glass-panel">
       <div className="continue-copy"><div className="section-kicker"><Sparkles size={15} />CONTINUE READING</div><h2>{recent.title}</h2><p>{recent.description}</p><div className="continue-meta"><span>{recent.author}</span><span><Clock3 size={14} />约 {readingMinutes(recent.chapters.reduce((n, c) => n + c.paragraphs.length, 0))} 分钟</span><span>{recent.chapters.length} 个章节</span>{recentDiff && <DifficultyBadge book={recent} known={knownSet} />}</div></div>

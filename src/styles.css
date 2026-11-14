@@ -567,7 +567,8 @@ h1,h2,h3,h4,p { margin-top: 0; }
   .library-footnote { align-items: flex-start; line-height: 1.6; }
   .library-footnote span:last-child { display: none; }
   .modal { padding: 20px; border-radius: 17px; }
-  .reader-page { padding: 0 9px 20px; }
+  /* 底部留出固定导航(61px+9px+安全区)的高度，避免末行文字被导航遮住 */
+  .reader-page { padding: 0 9px calc(88px + env(safe-area-inset-bottom)); }
   .reader-toolbar { top: 0; height: 58px; margin-bottom: 9px; border-radius: 13px; padding: 0 8px; }
   .reader-book-title strong { max-width: 145px; font-size: 11px; }
   .reader-book-title span { display: none; }

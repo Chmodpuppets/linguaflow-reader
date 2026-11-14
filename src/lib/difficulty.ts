@@ -79,6 +79,17 @@ export function bookDifficulty(book: Pick<Book, 'id' | 'chapters'>, known: Reado
 }
 
 export interface BookRecommendation { book: Book; coverage: number; band: DifficultyBand; reason: string }
+export interface ColdStartPick { book: Book; reason: string }
+
+const LEVEL_ORDER: Record<string, number> = { A1: 0, A2: 1, B1: 2, B2: 3 };
+
+/** 冷启动推荐：还没有任何已知词时，挑最低级别的分级书（优先未读），把新用户引进入门阶梯。 */
+export function coldStartPick(books: Book[]): ColdStartPick | null {
+  const graded = books.filter((b) => b.level && LEVEL_ORDER[b.level] !== undefined);
+  if (!graded.length) return null;
+  const pick = [...graded].sort((a, b) => (LEVEL_ORDER[a.level!] - LEVEL_ORDER[b.level!]) || (a.progress - b.progress))[0];
+  return { book: pick, reason: '还没有已知词积累——先从最轻松的分级读起；读时把认识的词标「已掌握」，推荐会越来越准。' };
+}
 
 /** 今日推荐：在可评估的书里挑最接近 i+1 的一本（理想区间优先、其次贴近 94%、再优先未读完）。known 为空返回 null。 */
 export function recommendBook(books: Book[], known: ReadonlySet<string>): BookRecommendation | null {
