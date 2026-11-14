@@ -154,6 +154,15 @@ h1,h2,h3,h4,p { margin-top: 0; }
 /* 真实封面（从 EPUB 提取）：整幅铺满、悬停微放大，保留书脊高光与底部渐隐以维持质感。 */
 .book-cover-img { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
 .book-card:hover .book-cover-img, .hero-book:hover .book-cover-img { transform: scale(1.05); }
+/* 继续阅读右栏：封面 + 进度环 + 按钮 */
+.continue-side { display: flex; flex-direction: column; align-items: center; gap: 18px; position: relative; z-index: 1; }
+.continue-action { display: flex; align-items: center; gap: 12px; }
+.progress-ring { width: 58px; height: 58px; border-radius: 50%; background: conic-gradient(var(--primary, #8b5cf6) var(--progress, 0deg), rgba(148,163,184,.18) 0); display: grid; place-items: center; position: relative; flex: none; }
+.progress-ring:before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--surface, #12121c); }
+.progress-ring span { position: relative; z-index: 1; font-size: 12.5px; font-weight: 600; color: var(--text, #e2e8f0); }
+button.hero-book { cursor: pointer; font: inherit; }
+.hero-book.has-image { padding: 0; }
+.hero-book.has-image:before, .hero-book.has-image:after { display: none; }
 .has-image { padding: 0; background: #0c0c15; }
 .has-image:before { z-index: 1; background: linear-gradient(90deg,rgba(255,255,255,.12),transparent 9%,transparent 91%,rgba(0,0,0,.22)); }
 .has-image:after { left: 0; right: 0; top: auto; bottom: 0; height: 36%; background: linear-gradient(to top,rgba(4,5,11,.5),transparent); box-shadow: none; z-index: 1; }
