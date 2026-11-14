@@ -882,3 +882,10 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .weak-chip i{font-style:normal;opacity:.7;margin-left:4px;font-size:10px}
 .learn-note{margin:10px 0 0;font-size:11px;color:var(--muted,#94a3b8)}
 @media (max-width:640px){.learn-grid{grid-template-columns:repeat(2,1fr)}}
+.recommend-card{display:flex;align-items:center;gap:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(56,189,248,.35);background:linear-gradient(120deg,rgba(56,189,248,.08),rgba(168,85,247,.06))}
+.recommend-icon{flex:0 0 auto;width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:rgba(56,189,248,.15);color:#7dd3fc}
+.recommend-copy{flex:1 1 auto;min-width:0}
+.recommend-copy h2{margin:2px 0;font-size:17px}
+.recommend-copy p{margin:0;font-size:12px;color:var(--muted,#94a3b8)}
+.recommend-action{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+@media (max-width:640px){.recommend-card{flex-wrap:wrap}.recommend-action{flex-direction:row;align-items:center;width:100%;justify-content:space-between}}

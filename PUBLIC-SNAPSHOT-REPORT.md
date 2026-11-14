@@ -1,7 +1,7 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：101
+文件数：102
 总大小：1.25 MB
 
 结论：✅ 未发现版权素材或书籍正文
@@ -105,6 +105,7 @@
 - `tests/unit/learning.test.ts`
 - `tests/unit/lingq.test.ts`
 - `tests/unit/prosody.test.ts`
+- `tests/unit/recommend.test.ts`
 - `tests/unit/sentence.test.ts`
 - `tests/unit/spaced.test.ts`
 - `tests/unit/voice.test.ts`

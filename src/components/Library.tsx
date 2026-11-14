@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowRight, BookOpen, BookOpenCheck, Clock3, FileUp, Flame, Import, Library as LibraryIcon, Minus, Plus, Search, Sparkles, Target, Trash2, Type } from 'lucide-react';
+import { ArrowRight, BookOpen, BookOpenCheck, Clock3, Compass, FileUp, Flame, Import, Library as LibraryIcon, Minus, Plus, Search, Sparkles, Target, Trash2, Type } from 'lucide-react';
 import type { Book } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 import { readingMinutes } from '../lib/utils';
-import { bookDifficulty } from '../lib/difficulty';
+import { bookDifficulty, recommendBook } from '../lib/difficulty';
 import type { ImportProgress } from '../lib/epub';
 
 export interface LibraryStats { known: number; learning: number; streak: number; today: number; goal: number }
@@ -31,6 +31,7 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
   const filtered = books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(query.toLowerCase()));
   const diffs = useMemo(() => new Map(books.map((book) => [book.id, bookDifficulty(book, knownSet)])), [books, knownSet]);
   const canMatch = knownSet.size > 0;
+  const recommendation = useMemo(() => recommendBook(books, knownSet), [books, knownSet]);
   const displayed = useMemo(() => {
     let list = filtered;
     if (canMatch && onlyIdeal) list = list.filter((book) => diffs.get(book.id)?.band.ideal);
@@ -62,6 +63,11 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       <div className="goal-stat goal-today"><Target size={18} /><div><b>{stats.today}/{goal}</b><span>今日目标</span><ProgressBar value={todayPct} /></div>
         {onGoal && <div className="goal-stepper"><button aria-label="降低每日目标" onClick={() => onGoal(Math.max(1, goal - 1))}><Minus size={13} /></button><button aria-label="提高每日目标" onClick={() => onGoal(Math.min(50, goal + 1))}><Plus size={13} /></button></div>}
       </div>
+    </section>}
+    {recommendation && <section className="recommend-card glass-panel" aria-label="今日推荐">
+      <div className="recommend-icon"><Compass size={20} /></div>
+      <div className="recommend-copy"><span className="section-kicker">TODAY'S PICK · 今日推荐</span><h2>{recommendation.book.title}</h2><p>{recommendation.reason}</p></div>
+      <div className="recommend-action"><span className={`difficulty-badge band-${recommendation.band.key}`}>{recommendation.band.label} · {recommendation.coverage}%</span><Button onClick={() => onOpen(recommendation.book)}>{recommendation.book.progress ? '继续阅读' : '开始阅读'}<ArrowRight size={16} /></Button></div>
     </section>}
     {recent && <section className="continue-card glass-panel">
       <div className="continue-copy"><div className="section-kicker"><Sparkles size={15} />CONTINUE READING</div><h2>{recent.title}</h2><p>{recent.description}</p><div className="continue-meta"><span>{recent.author}</span><span><Clock3 size={14} />约 {readingMinutes(recent.chapters.reduce((n, c) => n + c.paragraphs.length, 0))} 分钟</span><span>{recent.chapters.length} 个章节</span>{recentDiff && <DifficultyBadge book={recent} known={knownSet} />}</div></div>

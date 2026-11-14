@@ -77,3 +77,29 @@ export function bookDifficulty(book: Pick<Book, 'id' | 'chapters'>, known: Reado
   const coverage = coveragePercent(freq, known);
   return { coverage, band: difficultyBand(coverage) };
 }
+
+export interface BookRecommendation { book: Book; coverage: number; band: DifficultyBand; reason: string }
+
+/** 今日推荐：在可评估的书里挑最接近 i+1 的一本（理想区间优先、其次贴近 94%、再优先未读完）。known 为空返回 null。 */
+export function recommendBook(books: Book[], known: ReadonlySet<string>): BookRecommendation | null {
+  if (!known.size) return null;
+  let best: BookRecommendation | null = null;
+  let bestScore = -Infinity;
+  for (const book of books) {
+    const diff = bookDifficulty(book, known);
+    if (!diff) continue;
+    const score = (diff.band.ideal ? 1000 : 0) - Math.abs(diff.coverage - 94) - book.progress * 0.1;
+    if (score > bestScore) {
+      bestScore = score;
+      const reason = diff.band.ideal
+        ? `覆盖率 ${diff.coverage}%：多数词认识、少量新词，正适合现在的你。`
+        : diff.band.key === 'easy'
+          ? `覆盖率 ${diff.coverage}%：读起来轻松，适合保持阅读节奏。`
+          : diff.band.key === 'stretch'
+            ? `覆盖率 ${diff.coverage}%：略有挑战，打开常驻注音就能读得动。`
+            : `覆盖率 ${diff.coverage}%：新词较多，建议先读分级桥再回来。`;
+      best = { book, coverage: diff.coverage, band: diff.band, reason };
+    }
+  }
+  return best;
+}
