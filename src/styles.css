@@ -915,3 +915,25 @@ button.hero-book { cursor: pointer; font: inherit; }
 .select-box{display:inline-flex;align-items:center;padding:6px;color:var(--muted,#94a3b8);background:none;border:0;cursor:pointer}
 .vocab-row.selected{border-color:rgba(129,140,248,.6);box-shadow:0 0 0 1px rgba(129,140,248,.4)}
 .vocab-row.selected .select-box{color:#818cf8}
+
+/* ── 补全重写组件引入但缺失的结构样式 ─────────────────────────── */
+.book-cover-button { display: block; flex: none; padding: 0; border: 0; background: none; cursor: pointer; }
+.book-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.book-title-row h3 { margin: 0; }
+.book-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; color: var(--muted); font-size: 10.5px; }
+.book-tags > span { display: inline-flex; align-items: center; gap: 4px; }
+.icon-button.subtle { color: var(--faint); }
+.icon-button.subtle:hover { color: #f87171; }
+.muted { color: var(--muted); }
+.dropzone { border: 1.5px dashed var(--line); border-radius: 16px; padding: 34px 22px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; transition: border-color .2s, background .2s; }
+.dropzone.dragging { border-color: rgba(139,92,246,.6); background: rgba(139,92,246,.06); }
+.dropzone h3 { margin: 0; font-size: 15px; }
+.dropzone p { margin: 0; color: var(--muted); font-size: 11.5px; max-width: 420px; }
+.recommend-card.cold-start { border-color: rgba(52,211,153,.35); }
+.sentence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.voice-recorder { display: flex; flex-direction: column; gap: 16px; }
+.reference-wave { height: 74px; }
+.heatmap-card { padding: 20px; }
+.time-capsule { display: flex; flex-direction: column; gap: 12px; }
+.library-page,.vocabulary-page,.review-page,.notes-page,.settings-page,.voice-lab-page,.voice-analytics-page { width: 100%; }
+.cover-kicker { display: block; font-size: 7px; letter-spacing: .16em; opacity: .65; }
