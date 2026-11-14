@@ -12,6 +12,7 @@ import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
 import { downloadJson, makeId } from './lib/utils';
 import { getCachedKnownWords, isSyncEnabled, knownWordsStale, recordEvent, refreshKnownWords, startLearningSync } from './lib/learning';
+import { computeKnownWords } from './lib/knownWords';
 import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
@@ -89,11 +90,7 @@ export default function App() {
 
   // P3 难度匹配：已知词 = pathmora 积累（sync 缓存）∪ 本地已 demonstrated 的词。
   const [syncKnown, setSyncKnown] = useState<string[]>(() => getCachedKnownWords());
-  const knownWords = useMemo(() => {
-    const goodIds = new Set(data.reviewLogs.filter((log) => log.result === 'good' || log.result === 'easy').map((log) => log.vocabId));
-    const local = data.vocabulary.filter((entry) => goodIds.has(entry.id) || entry.familiarity >= 3).map((entry) => entry.word);
-    return Array.from(new Set([...local, ...syncKnown].map((word) => word.toLowerCase())));
-  }, [data.vocabulary, data.reviewLogs, syncKnown]);
+  const knownWords = useMemo(() => computeKnownWords(data.vocabulary, data.reviewLogs, data.wordStates || {}, syncKnown), [data.vocabulary, data.reviewLogs, data.wordStates, syncKnown]);
 
   // 学习记录上云（opt-in）：联网恢复 / 周期补传离线队列。未开启同步时不做任何事。
   useEffect(() => { startLearningSync(); }, []);
