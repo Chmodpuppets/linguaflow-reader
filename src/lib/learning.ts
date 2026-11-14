@@ -189,6 +189,48 @@ export async function refreshKnownWords(): Promise<string[] | null> {
   }
 }
 
+// 学习档案：把 /learn/summary 归一化成可直接展示的形状，让「上云」对用户可见、可感。
+export interface LearnSummary {
+  knownCount: number;
+  weak: { word: string; misses: number }[];
+  savedSentences: number;
+  shadow: { count: number; avgAccuracy: number; avgWpm: number };
+  activityDays: number;
+  counts: { lookup: number; save_sentence: number; shadow: number; review: number };
+}
+
+/** 拉取学习档案。未开启 / 无 token / 不可达返回 null（调用方隐藏面板）。 */
+export async function fetchLearnSummary(): Promise<LearnSummary | null> {
+  const token = getSyncToken();
+  if (!isSyncEnabled() || !token) return null;
+  try {
+    const res = await fetch(`${getDictionaryBase()}/learn/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const weakRaw: unknown[] = Array.isArray(body?.weakWords) ? body.weakWords : [];
+    const weak = weakRaw
+      .map((w) => typeof w === 'string' ? { word: w, misses: 1 } : { word: (w as { word?: string })?.word, misses: Number((w as { misses?: number; count?: number })?.misses ?? (w as { count?: number })?.count ?? 1) })
+      .filter((w): w is { word: string; misses: number } => typeof w.word === 'string' && !!w.word)
+      .sort((a, b) => b.misses - a.misses);
+    const knownRaw: unknown[] = Array.isArray(body?.knownWords) ? body.knownWords : [];
+    const knownCount = knownRaw.length;
+    const counts = body?.counts || {};
+    return {
+      knownCount,
+      weak,
+      savedSentences: Number(body?.savedSentences) || 0,
+      shadow: { count: Number(body?.shadow?.count) || 0, avgAccuracy: Number(body?.shadow?.avgAccuracy) || 0, avgWpm: Number(body?.shadow?.avgWpm) || 0 },
+      activityDays: Number(body?.activityDays) || 0,
+      counts: { lookup: Number(counts.lookup) || 0, save_sentence: Number(counts.save_sentence) || 0, shadow: Number(counts.shadow) || 0, review: Number(counts.review) || 0 },
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 启动后台补传：联网恢复 + 周期性 flush。App 挂载时调用一次。 */
 export function startLearningSync() {
   if (typeof window === 'undefined') return;

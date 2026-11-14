@@ -93,6 +93,31 @@ test('书库难度匹配：连接后按已知词显示覆盖率徽章', async ({
   expect(pageErrors).toEqual([]);
 });
 
+// 学习档案：连接后设置页展示 /learn/summary 归一化结果（已掌握/收藏/跟读/活跃+薄弱词）。
+test('学习档案：连接后设置页展示学习记录汇总与薄弱词', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
+  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
+  await page.route('**/api/learn/summary', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ knownWords: ['attention', 'curiosity', 'notice', 'world', 'interesting'], weakWords: [{ word: 'subtle', misses: 2 }], savedSentences: 3, shadow: { count: 4, avgAccuracy: 0.9, avgWpm: 120 }, activityDays: 6, counts: { lookup: 12, save_sentence: 3, shadow: 4, review: 5 } }) }));
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /阅读设置/ }).click();
+  await page.getByRole('switch', { name: '同步学习记录' }).click();
+  await page.locator('.sync-field input').first().fill('e2e@example.com');
+  await page.locator('.sync-field input[type="password"]').fill('pass123');
+  await page.getByRole('button', { name: '连接账号' }).click();
+  await expect(page.getByText('账号已连接')).toBeVisible();
+
+  await expect(page.locator('.learn-profile')).toBeVisible();
+  await expect(page.locator('.learn-grid')).toContainText('已掌握词');
+  await expect(page.locator('.learn-grid')).toContainText('5');
+  await expect(page.locator('.learn-grid')).toContainText('活跃天数');
+  await expect(page.locator('.weak-chip').first()).toContainText('subtle');
+  await expect(page.locator('.learn-sub')).toContainText('90%');
+  expect(pageErrors).toEqual([]);
+});
+
 // P2 降级：pathmora 计划不可达时，用已部署的 linguaflow 学习记录生成本地计划（横幅标「本地计划」）。
 test('pathmora 不可达时复习页回退本地计划（学习记录排程）', async ({ page }) => {
   const pageErrors: string[] = [];

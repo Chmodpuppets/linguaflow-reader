@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
-import { BookOpen, Check, CloudUpload, Database, Download, HardDrive, LogIn, Minus, Plus, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
-import { clearSyncToken, connectAccount, flushQueue, getSyncToken, isSyncEnabled, pendingCount, setSyncEnabled } from '../lib/learning';
+import { useEffect, useRef, useState } from 'react';
+import { BookOpen, Check, CloudUpload, Database, Download, Flame, GraduationCap, HardDrive, LogIn, Mic, Minus, Plus, Quote, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
+import { clearSyncToken, connectAccount, fetchLearnSummary, flushQueue, getSyncToken, isSyncEnabled, pendingCount, setSyncEnabled, type LearnSummary } from '../lib/learning';
 import type { AppData, Book, ReaderSettings } from '../types';
 import type { StorageChannel } from '../lib/db';
 import { findOrphanVoiceAudioIds } from '../lib/db';
@@ -93,6 +93,32 @@ function LearningSyncCard({ onNotify }: { onNotify?: (message: string) => void }
     {enabled && token && <div className="sync-connected">
       <div className="storage-status"><span className="online" /><div><strong>账号已连接</strong><p>{pending ? `${pending} 条记录待同步` : '学习记录已是最新'}</p></div></div>
       <div className="backup-buttons"><Button variant="secondary" disabled={busy} onClick={() => void syncNow()}><RefreshCw size={16} />立即同步</Button><Button variant="ghost" onClick={disconnect}>断开账号</Button></div>
+      <LearningProfile />
     </div>}
   </section>;
+}
+
+function LearningProfile() {
+  const [summary, setSummary] = useState<LearnSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const load = () => { setLoading(true); void fetchLearnSummary().then((s) => { setSummary(s); setLoading(false); }); };
+  useEffect(load, []);
+  if (loading) return <div className="learn-profile"><span className="eyebrow">LEARNING PROFILE</span><p className="learn-empty">正在读取你的学习档案…</p></div>;
+  if (!summary) return null;
+  const { knownCount, weak, savedSentences, shadow, activityDays, counts } = summary;
+  return <div className="learn-profile">
+    <div className="learn-profile-head"><span className="eyebrow">LEARNING PROFILE · 学习档案</span><button className="chip" onClick={load}><RefreshCw size={12} />刷新</button></div>
+    <div className="learn-grid">
+      <div><GraduationCap size={16} /><strong>{knownCount}</strong><span>已掌握词</span></div>
+      <div><Quote size={16} /><strong>{savedSentences}</strong><span>收藏句子</span></div>
+      <div><Mic size={16} /><strong>{shadow.count}</strong><span>跟读次数</span></div>
+      <div><Flame size={16} /><strong>{activityDays}</strong><span>活跃天数</span></div>
+    </div>
+    <div className="learn-sub">
+      <span>查词 {counts.lookup}</span><span>收藏 {counts.save_sentence}</span><span>复习 {counts.review}</span>
+      {shadow.count > 0 && <span>跟读准确率 {Math.round(shadow.avgAccuracy * 100)}% · {Math.round(shadow.avgWpm)} WPM</span>}
+    </div>
+    {weak.length > 0 && <div className="learn-weak"><span className="learn-weak-title">薄弱词（pathmora 会优先安排复习）</span><div className="learn-weak-chips">{weak.slice(0, 12).map((w) => <span key={w.word} className="weak-chip">{w.word}<i>×{w.misses}</i></span>)}</div></div>}
+    <p className="learn-note">这些记录只用于为你制定学习计划；书籍文件仍只留在本设备。</p>
+  </div>;
 }
