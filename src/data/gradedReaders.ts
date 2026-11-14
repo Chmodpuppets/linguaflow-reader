@@ -166,6 +166,35 @@ export const gradedBooks: Book[] = [
       'That light, small and far away, was the whole of his hope — the future he had invented and refused to give up.',
     ],
   ),
+  // 改写经典③：《秘密花园》（公版）开头改写到 B2，与盖茨比桥并列，
+  // 让 B2 也有两本可选，读完可进入原著。
+  {
+    id: 'graded-b2-garden',
+    title: 'The Secret Garden (Graded Bridge)',
+    author: 'Frances Hodgson Burnett · 分级改写',
+    description: '原著桥：把《秘密花园》开头改写到 B2，另一条进入长篇原著的路。',
+    cover: 'B2 · GARDEN',
+    accent: '#34d399',
+    progress: 0,
+    currentChapter: 0,
+    currentParagraph: 0,
+    addedAt: '2026-11-14T09:00:00.000Z',
+    source: 'sample',
+    level: 'B2',
+    chapters: [{
+      id: 'graded-b2-garden-1',
+      title: 'The Locked Door',
+      paragraphs: [
+        'When Mary Lennox was sent to Misselthwaite Manor to live with her uncle, everybody said she was the most disagreeable child ever seen.',
+        'She had a little thin face and a sour expression, and her hair and skin were yellow, because she had been born in India and had always been ill.',
+        'Her father had been a busy official who never noticed her, and her mother cared only for her own pleasures, so Mary was left to servants who obeyed her every whim.',
+        'By the time she was nine she was a tyrannical, selfish little thing; and when a sickness took her parents in a single night, nobody mourned them deeply.',
+        'She was sent across the sea to Yorkshire, to a great house on the edge of a moor, where her uncle Mr Craven lived almost alone.',
+        'The house had a hundred rooms, most of them shut and locked; and outside there were gardens within gardens, and one secret garden whose door had been hidden and whose key had been buried for ten years.',
+        'Mary, who had never cared for anything, began to care about that locked door; and in finding it, and the boy Dickon, and her sick cousin Colin, she slowly came back to life herself.',
+      ],
+    }],
+  },
 ];
 
 // 为分级书架预置注音释义：切到「全部有释义」即可看到 ruby，降低冷启动查词摩擦。
@@ -239,4 +268,12 @@ export const gradedGlosses: Record<string, WordGloss> = {
   waistcoat: { zh: '马甲' },
   curiosity: { zh: '好奇心' },
   hedge: { zh: '树篱' },
+  disagreeable: { zh: '难相处的' },
+  sour: { zh: '乖戾的' },
+  whim: { zh: '任性' },
+  tyrannical: { zh: '专横的' },
+  mourned: { zh: '哀悼' },
+  moor: { zh: '荒原' },
+  locked: { zh: '上锁的' },
+  buried: { zh: '埋藏' },
 };

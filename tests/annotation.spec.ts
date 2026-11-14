@@ -35,6 +35,19 @@ test('词状态驱动常驻注音：学习中显示、已掌握移除，覆盖�
   expect(pageErrors).toEqual([]);
 });
 
+test('冷启动：新用户打开入门 A1 书即见预置常驻注音（核心价值首次交互可感知）', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.goto('/');
+  await page.locator('.recommend-card.cold-start').getByRole('button', { name: '开始阅读' }).click();
+  await expect(page.locator('.reader-page')).toBeVisible();
+  // 预置「学习中」词直接渲染 ruby，无需先查词标记
+  await expect(page.locator('.chapter-body ruby rt').first()).toBeVisible();
+  expect(await page.locator('.chapter-body ruby rt').count()).toBeGreaterThan(0);
+  await expect(page.locator('.stat-chip.learning')).toContainText('学习中 5');
+  expect(pageErrors).toEqual([]);
+});
+
 test('版式面板可切换常驻注音模式（off 关闭 / all 全注）', async ({ page }) => {
   await page.goto('/');
   await page.locator('.book-card').first().getByRole('button', { name: '继续阅读' }).click();
