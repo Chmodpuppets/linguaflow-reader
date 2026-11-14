@@ -760,6 +760,14 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .difficulty-badge.band-hard { color: #f87171; background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .35); }
 .match-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #a78bfa; background: rgba(139, 92, 246, .16); border: 1px solid rgba(139, 92, 246, .5); }
 
+/* 书库顶部：搜索 + 统计 一行对齐 */
+.library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 0 0 14px; }
+.library-toolbar .search-box { flex: 1 1 260px; max-width: 420px; min-width: 0; }
+.library-stats { display: inline-flex; align-items: center; gap: 10px; color: var(--muted, #94a3b8); font-size: 12.5px; white-space: nowrap; }
+.library-stats svg { color: var(--primary, #8b5cf6); }
+.library-stats span + span { padding-left: 10px; border-left: 1px solid var(--line, rgba(148,163,184,.25)); }
+@media (max-width: 640px) { .library-toolbar { flex-direction: column; align-items: stretch; } .library-toolbar .search-box { max-width: none; } .library-stats { justify-content: flex-start; } }
+
 /* 选书推荐工具条（P3+） */
 .library-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 18px; }
 .seg-control { display: inline-flex; border: 1px solid var(--line, rgba(148,163,184,.25)); border-radius: 10px; overflow: hidden; }
