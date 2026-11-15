@@ -23,8 +23,19 @@ async function loadOptionalBook(): Promise<Book | null> {
   }
 }
 
+/** 公版经典文学独立成 chunk，按需加载，不撑大首屏主包。 */
+async function loadClassics(): Promise<Book[]> {
+  try {
+    const mod = await import('./classics');
+    return mod.classicBooks;
+  } catch {
+    return [];
+  }
+}
+
 /** 本机素材缺失 / 离线首启时直接返回样书，不再额外导出一个零引用的兜底函数。 */
 export async function loadBuiltinBooks(): Promise<Book[]> {
-  const optional = await loadOptionalBook();
-  return optional ? [...sampleBooks, optional] : sampleBooks;
+  const [optional, classics] = await Promise.all([loadOptionalBook(), loadClassics()]);
+  const books = [...sampleBooks, ...classics];
+  return optional ? [...books, optional] : books;
 }

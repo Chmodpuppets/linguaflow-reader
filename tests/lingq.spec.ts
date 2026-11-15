@@ -51,6 +51,20 @@ test('超长单段导入被拆成多个可读段', async ({ page }) => {
   expect(count).toBeGreaterThan(1);
 });
 
+test('经典书架：打开爱丽丝读到真实多段公版正文', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.goto('/');
+  await expect(page.locator('.book-card')).toHaveCount(16);
+  await page.locator('.book-cover-button[aria-label*="Alice"]').first().click();
+  await expect(page.locator('.reader-page')).toBeVisible();
+  const paras = page.locator('.chapter-body p');
+  await expect(paras.first()).toBeVisible();
+  expect(await paras.count()).toBeGreaterThan(3);
+  await expect(page.locator('.chapter-body')).toContainText('Alice');
+  expect(pageErrors).toEqual([]);
+});
+
 test('TXT 文件导入 + 每日目标可调', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '导入 EPUB' }).click();
