@@ -60,6 +60,8 @@ export interface DictionaryEntry {
 export interface VocabEntry {
   id: string;
   word: string;
+  /** 多词短语 / 习语（如 "give up"）。为 true 时 word 是整个短语，复习按整块挖空，听写跳过。 */
+  isPhrase?: boolean;
   context: string;
   bookId: string;
   bookTitle: string;

@@ -5,6 +5,7 @@ import { Button, EmptyState, ProgressBar, Segmented } from './UI';
 import { fetchFallbackPlan, fetchReaderPlan, getSyncToken, isSyncEnabled, type ReaderPlan } from '../lib/learning';
 import { sentenceToReviewEntry } from '../lib/sentence';
 import { dictationCorrect } from '../lib/dictation';
+import { normalizeForCompare } from '../lib/phrase';
 
 type Mode = 'flashcard' | 'cloze' | 'sentence' | 'dictation';
 type Result = ReviewLog['result'];
@@ -24,7 +25,7 @@ export default function Review({ entries, sentences, onReview, onReviewSentence,
   const current = queue[index];
   const due = useMemo(() => entries.filter((entry) => new Date(entry.dueAt).getTime() <= Date.now()).length, [entries]);
   const cloze = current ? current.context.replace(new RegExp(current.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '_____') : '';
-  const correct = current ? (mode === 'dictation' ? dictationCorrect(current.word, answer) : answer.trim().toLowerCase().replace(/[^a-z'-]/g, '') === current.word.toLowerCase()) : false;
+  const correct = current ? (mode === 'dictation' ? dictationCorrect(current.word, answer) : normalizeForCompare(answer) === normalizeForCompare(current.word)) : false;
   const speakWord = (slow: boolean) => { if (!current || typeof window.speechSynthesis === 'undefined') return; const utterance = new SpeechSynthesisUtterance(current.word); utterance.lang = 'en-US'; utterance.rate = slow ? 0.55 : 0.95; window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance); };
   // 听写：每进入一个新词自动读一遍（开始按钮的用户手势之后，允许发声）。
   useEffect(() => { if (mode === 'dictation' && started && !finished && current) speakWord(false); }, [mode, started, finished, index]);
@@ -50,7 +51,8 @@ export default function Review({ entries, sentences, onReview, onReviewSentence,
       setQueue(ordered.slice(0, 20).map(sentenceToReviewEntry)); setIndex(0); setScore(0); setStarted(true); setFinished(false); setRevealed(false); setAnswer(''); setChecked(false);
       return;
     }
-    const local = [...entries].sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+    // 听写只练单词（整块短语靠听写拼回不现实）；其余模式短语按整块挖空 / 翻卡。
+    const local = [...entries].filter((entry) => mode !== 'dictation' || !entry.isPhrase).sort((a, b) => a.dueAt.localeCompare(b.dueAt));
     let ordered = local;
     if (plan && plan.due.length) {
       const byWord = new Map(local.map((e) => [e.word.toLowerCase(), e]));

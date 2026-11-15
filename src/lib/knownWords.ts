@@ -15,7 +15,8 @@ export function computeKnownWords(
   syncKnown: string[],
 ): string[] {
   const goodIds = new Set(reviewLogs.filter((log) => log.result === 'good' || log.result === 'easy').map((log) => log.vocabId));
-  const fromVocab = vocabulary.filter((entry) => goodIds.has(entry.id) || entry.familiarity >= 3).map((entry) => entry.word);
+  // 短语 / 习语是整块表达，不计入「单个已知词」的覆盖率，避免抬高难度匹配。
+  const fromVocab = vocabulary.filter((entry) => !entry.isPhrase && (goodIds.has(entry.id) || entry.familiarity >= 3)).map((entry) => entry.word);
   const fromStates = Object.entries(wordStates || {}).filter(([, state]) => state === 'known').map(([word]) => word);
   return Array.from(new Set([...fromVocab, ...fromStates, ...syncKnown].map((word) => word.toLowerCase())));
 }

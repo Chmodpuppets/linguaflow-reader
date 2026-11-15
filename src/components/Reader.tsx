@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, Layers, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
 import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord, WordGloss, WordState } from '../types';
 import { chapterStats, rubyGlossFor, type AnnotationMode } from '../lib/annotation';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
 import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
+import { cleanPhrase, isMultiWord, phraseKey } from '../lib/phrase';
 import { useBookAudioSrc } from '../lib/bookAudio';
 import { Button, Modal, ProgressBar } from './UI';
 import AudioBar from './AudioBar';
@@ -99,6 +100,9 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   const [showFullParagraph, setShowFullParagraph] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
+  // 短语 / 习语收藏：划选多词时把整个短语存进词汇本（不折叠成单词），释义由用户自填。
+  const [phraseDraft, setPhraseDraft] = useState<{ text: string; context: string; paragraphIndex: number } | null>(null);
+  const [phraseMeaning, setPhraseMeaning] = useState('');
   const [voiceTarget, setVoiceTarget] = useState('');
   const [viewMode, setViewMode] = useState<'text' | 'image'>('text');
   const [zoom, setZoom] = useState(false);
@@ -236,6 +240,30 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     onNotify(`已收藏 ${word}，原句也一起保存了`);
   };
 
+  // 短语 / 习语：把划选的多个词作为整体收藏，释义由用户填写（词典通常不收习语）。
+  const openPhrase = () => {
+    if (!selection) return;
+    setPhraseDraft({ text: cleanPhrase(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex });
+    setPhraseMeaning('');
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+  };
+  const phraseAlreadySaved = phraseDraft ? savedWords.some((word) => word.toLowerCase() === phraseKey(phraseDraft.text)) : false;
+  const savePhrase = () => {
+    if (!phraseDraft) return;
+    const text = cleanPhrase(phraseDraft.text);
+    if (phraseAlreadySaved) { onNotify('这个短语已经在你的词汇本里'); return; }
+    const meaning = phraseMeaning.trim();
+    onAddVocab({
+      word: text, isPhrase: true,
+      context: extractSentence(phraseDraft.context, text),
+      bookId: book.id, bookTitle: book.title, chapterId: chapter.id, chapterTitle: chapter.title, paragraphIndex: phraseDraft.paragraphIndex, note: '',
+      dictionary: { word: text, phonetic: '', partOfSpeech: 'phrase', meaning, chinese: meaning, usage: '', example: '', exampleCn: '', synonyms: [] },
+    });
+    setPhraseDraft(null); setPhraseMeaning('');
+    onNotify(`已收藏短语「${text}」，可在词汇本与复习里继续练`);
+  };
+
   // 收藏句子：把含该词的整句 + 当时释义存进句子收藏（笔记页可回顾 / 朗读 / 回原文）。
   const saveSentence = () => {
     if (!lookup) return;
@@ -342,7 +370,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
       <aside className={`reader-aside glass-panel ${contentsOpen ? 'open' : ''}`}><div className="aside-heading"><div><span className="eyebrow">IN THIS BOOK</span><h3>目录</h3></div><button className="icon-button" onClick={() => setContentsOpen(false)}><X size={17} /></button></div><div className="toc-list">{book.chapters.map((item, index) => <button className={index === chapterIndex ? 'active' : ''} key={item.id} onClick={() => goToChapter(index)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item.title}</strong>{index === chapterIndex && <ArrowRight size={15} />}</button>)}</div><div className="aside-note"><BookMarked size={18} /><strong>阅读数据在本机</strong><p>当前书籍、标记与词汇均可离线访问。</p></div></aside>
     </div>
     {audioSrc && audioOpen && <div className="reader-audio"><AudioBar book={book} src={audioSrc} page={pageNumber} onNotify={onNotify} /></div>}
-    {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button><button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button></div>}
+    {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button>{isMultiWord(selection.text) ? <button onClick={openPhrase}><Layers size={16} /><span>存为短语</span></button> : <button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button>}</div>}
     {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}>
       <section className="lookup-panel glass-panel" aria-label="查词面板">
         <div className="lookup-grabber" />
@@ -367,6 +395,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
       </section>
     </div>}
     {noteOpen && selection && <Modal title="给这段原文留条笔记" eyebrow="THINK WITH THE TEXT" onClose={() => setNoteOpen(false)}><blockquote className="note-quote">{selection.text}</blockquote><textarea className="note-input" autoFocus value={note} onChange={(event) => setNote(event.target.value)} placeholder="这句话让你想到了什么？" rows={5} /><div className="modal-actions"><Button variant="ghost" onClick={() => setNoteOpen(false)}>取消</Button><Button onClick={() => saveHighlight(true)} disabled={!note.trim()}>保存笔记</Button></div></Modal>}
+    {phraseDraft && <Modal title="收藏这个短语" eyebrow="PHRASE · IDIOM" onClose={() => setPhraseDraft(null)}><div className="phrase-modal"><div className="phrase-head"><Layers size={18} /><h3>{phraseDraft.text}</h3><button className="icon-button" onClick={() => speak(phraseDraft.text)} aria-label="朗读短语"><Volume2 size={17} /></button></div><blockquote className="phrase-context">{sentenceParts(extractSentence(phraseDraft.context, phraseDraft.text), phraseDraft.text).map((part, index) => part.hit ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>)}</blockquote><label className="phrase-meaning-label" htmlFor="phrase-meaning">它的意思（词典常不收习语，自己写一句最记得住）</label><input id="phrase-meaning" className="phrase-meaning" autoFocus value={phraseMeaning} onChange={(event) => setPhraseMeaning(event.target.value)} placeholder="例如：放弃；不再坚持" /><div className="modal-actions"><Button variant="ghost" onClick={() => setPhraseDraft(null)}>取消</Button><Button onClick={savePhrase} disabled={phraseAlreadySaved}>{phraseAlreadySaved ? <><Check size={16} />已在词汇本</> : <><BookmarkPlus size={16} />收藏短语</>}</Button></div></div></Modal>}
     {voiceTarget && <div className="reader-voice-backdrop"><section className="reader-voice-drawer glass-panel"><div className="drawer-heading"><div><span className="eyebrow">LISTEN & CATCH · VOICE LAB</span><h2>跟读对比</h2></div><button className="icon-button" onClick={() => setVoiceTarget('')} aria-label="关闭跟读面板"><X size={20} /></button></div><VoiceRecorder compact targetText={voiceTarget} mode="shadowing" audioUrl={audioSrc} bookId={book.id} onSave={onSaveVoice} /></section></div>}
     {audioBindOpen && <div className="reader-voice-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAudioBindOpen(false); }}>
       <section className="reader-voice-drawer glass-panel" aria-label="有声书边听边看">
