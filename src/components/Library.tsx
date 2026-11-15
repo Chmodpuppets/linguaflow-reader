@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowRight, BookOpen, BookOpenCheck, Clock3, Compass, FileUp, Flame, FolderOpen, Import, Library as LibraryIcon, Minus, Plus, Search, Sparkles, Target, Trash2, Type } from 'lucide-react';
-import type { Book } from '../types';
+import { ArrowRight, Bookmark, BookOpen, BookOpenCheck, Clock3, Compass, FileUp, Flame, FolderOpen, Import, Library as LibraryIcon, Minus, Plus, Search, Sparkles, Tags, Target, Trash2, Type } from 'lucide-react';
+import type { Book, LibraryView } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 import { readingMinutes } from '../lib/utils';
 import { bookDifficulty, coldStartPick, recommendBook } from '../lib/difficulty';
+import { allTags, filterByTag, parseTags, viewMatches } from '../lib/libraryOrganize';
 import type { ImportProgress } from '../lib/epub';
 
 export interface LibraryStats { known: number; learning: number; streak: number; today: number; goal: number }
@@ -40,11 +41,16 @@ function DifficultyBadge({ book, known }: { book: Book; known: ReadonlySet<strin
   return <span className={`difficulty-badge band-${diff.band.key}`} title={`词频加权覆盖率 ${diff.coverage}%：书中约 ${diff.coverage}% 的词次你已认识`}>{diff.band.label} · {diff.coverage}%</span>;
 }
 
-export default function Library({ books, knownWords, onOpen, onImport, onImportText, onDelete, importing, importProgress, stats, onGoal }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void }) {
+export default function Library({ books, knownWords, onOpen, onImport, onImportText, onDelete, importing, importProgress, stats, onGoal, views, onSaveView, onDeleteView, onSetTags }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void; views?: LibraryView[]; onSaveView?: (view: Omit<LibraryView, 'id'>) => void; onDeleteView?: (id: string) => void; onSetTags?: (id: string, tags: string[]) => void }) {
   const knownSet = useMemo(() => new Set((knownWords || []).map((word) => word.toLowerCase())), [knownWords]);
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<'default' | 'match'>('default');
   const [onlyIdeal, setOnlyIdeal] = useState(false);
+  const [activeTag, setActiveTag] = useState('');
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [viewName, setViewName] = useState('');
+  const [tagEditBook, setTagEditBook] = useState<Book | null>(null);
+  const [tagDraft, setTagDraft] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importTab, setImportTab] = useState<'epub' | 'text'>('epub');
   const [textTitle, setTextTitle] = useState('');
@@ -53,7 +59,11 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
   const fileRef = useRef<HTMLInputElement>(null);
   const recent = [...books].sort((a, b) => (b.lastReadAt || '').localeCompare(a.lastReadAt || ''))[0];
   const recentDiff = recent ? bookDifficulty(recent, knownSet) : null;
-  const filtered = books.filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(query.toLowerCase()));
+  const tags = useMemo(() => allTags(books), [books]);
+  const filtered = filterByTag(books, activeTag).filter((book) => `${book.title} ${book.author}`.toLowerCase().includes(query.toLowerCase()));
+  const applyView = (view: LibraryView) => { setQuery(view.query); setSortMode(view.sortMode); setOnlyIdeal(view.onlyIdeal); setActiveTag(view.tag); setViewsOpen(false); };
+  const currentView = { query, sortMode, onlyIdeal, tag: activeTag };
+  const openTagEditor = (book: Book) => { setTagEditBook(book); setTagDraft((book.tags || []).join('，')); };
   const diffs = useMemo(() => new Map(books.map((book) => [book.id, bookDifficulty(book, knownSet)])), [books, knownSet]);
   const canMatch = knownSet.size > 0;
   const recommendation = useMemo(() => recommendBook(books, knownSet), [books, knownSet]);
@@ -133,10 +143,14 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       </div>
     </section>}
     <div className="library-toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书库" /></div><div className="library-stats"><LibraryIcon size={16} /><span>{books.length} 本书</span><span>平均进度 {totalProgress}%</span></div></div>
+    {(tags.length > 0 || (views && views.length > 0) || onSaveView) && <div className="library-organize">
+      <div className="tag-chips" role="group" aria-label="按标签筛选"><button className={`filter-chip ${activeTag === '' ? 'active' : ''}`} onClick={() => setActiveTag('')}>全部</button>{tags.map((tag) => <button key={tag} className={`filter-chip ${activeTag === tag ? 'active' : ''}`} aria-pressed={activeTag === tag} onClick={() => setActiveTag(activeTag === tag ? '' : tag)}><Tags size={13} />{tag}</button>)}</div>
+      {onSaveView && <button className="views-button" onClick={() => setViewsOpen(true)}><Bookmark size={15} />视图{views && views.length ? ` · ${views.length}` : ''}</button>}
+    </div>}
     {canMatch && <div className="library-tools" role="group" aria-label="选书排序与筛选"><div className="seg-control"><button className={sortMode === 'default' ? 'active' : ''} onClick={() => setSortMode('default')}>综合</button><button className={sortMode === 'match' ? 'active' : ''} onClick={() => setSortMode('match')}><Sparkles size={14} />难度匹配</button></div><button className={`filter-chip ${onlyIdeal ? 'active' : ''}`} aria-pressed={onlyIdeal} onClick={() => setOnlyIdeal((v) => !v)}>只看 i+1 · 匹配你的水平</button><span className="tools-hint">覆盖率 90–98% 为 i+1：多数词认识、少量新词，读得动又有收获。</span></div>}
     {displayed.length ? <div className="book-grid">{displayed.map((book) => <article className="book-card glass-panel" key={book.id}>
       <button className="book-cover-button" onClick={() => onOpen(book)} aria-label={`打开《${book.title}》`}><div className={`book-cover${book.coverImage ? ' has-image' : ''}`} style={{ '--accent': book.accent } as React.CSSProperties}>{book.coverImage ? <img className="book-cover-img" src={book.coverImage} alt="" /> : <><span className="cover-kicker">LINGUAFLOW</span><strong>{book.title}</strong><i>{book.author}</i></>}</div></button>
-      <div className="book-info"><div className="book-title-row"><h3>{book.title}</h3>{onDelete && book.source !== 'sample' && <button className="icon-button subtle" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`}><Trash2 size={15} /></button>}</div><p>{book.author}</p><div className="book-tags">{book.level && <span className="level-badge">{book.level}</span>}<DifficultyBadge book={book} known={knownSet} /><span>{book.chapters.length} 章</span><span>{book.source === 'epub' ? 'EPUB' : book.source === 'pdf' ? 'PDF' : book.source === 'text' ? '文本' : book.level ? '分级' : '样书'}</span></div><div className="book-progress"><ProgressBar value={book.progress} /><span>{book.progress}%</span></div><Button variant="secondary" size="sm" onClick={() => onOpen(book)}><BookOpen size={15} />{book.progress ? '继续阅读' : '开始阅读'}</Button></div>
+      <div className="book-info"><div className="book-title-row"><h3>{book.title}</h3>{onSetTags && <button className="icon-button subtle" onClick={() => openTagEditor(book)} aria-label={`给《${book.title}》加标签`}><Tags size={15} /></button>}{onDelete && book.source !== 'sample' && <button className="icon-button subtle" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`}><Trash2 size={15} /></button>}</div><p>{book.author}</p><div className="book-tags">{book.level && <span className="level-badge">{book.level}</span>}<DifficultyBadge book={book} known={knownSet} /><span>{book.chapters.length} 章</span><span>{book.source === 'epub' ? 'EPUB' : book.source === 'pdf' ? 'PDF' : book.source === 'text' ? '文本' : book.level ? '分级' : '样书'}</span>{(book.tags || []).map((tag) => <button className="book-tag" key={tag} onClick={() => setActiveTag(tag)} title={`按「${tag}」筛选`}>{tag}</button>)}</div><div className="book-progress"><ProgressBar value={book.progress} /><span>{book.progress}%</span></div><Button variant="secondary" size="sm" onClick={() => onOpen(book)}><BookOpen size={15} />{book.progress ? '继续阅读' : '开始阅读'}</Button></div>
     </article>)}</div> : <EmptyState icon={<LibraryIcon size={28} />} title={books.length ? '没有找到这本书' : '书架还是空的'} description={books.length ? '换一个关键词，或导入你自己的 EPUB / PDF / 文本。' : '把 EPUB / PDF / 文本拖进来，或选择你的书籍文件夹，开始搭建自己的书架。'} action={<Button onClick={() => { setImportTab('epub'); setImportOpen(true); }}>导入内容</Button>} />}
     {importOpen && <Modal title={importTab === 'epub' ? '导入书籍' : '粘贴文本'} onClose={() => setImportOpen(false)}>
       <div className="import-tabs segmented" role="group" aria-label="导入方式"><button className={importTab === 'epub' ? 'active' : ''} onClick={() => setImportTab('epub')}>EPUB / PDF 文件</button><button className={importTab === 'text' ? 'active' : ''} onClick={() => setImportTab('text')}>粘贴文本</button></div>
@@ -144,5 +158,13 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       : <div className="text-import"><label className="field"><span>标题（可选）</span><input value={textTitle} onChange={(event) => setTextTitle(event.target.value)} placeholder="文章 / 书名" /></label><label className="field"><span>正文</span><textarea value={textBody} onChange={(event) => setTextBody(event.target.value)} rows={10} placeholder="粘贴英文文章、新闻、演讲稿或 Markdown…空行分段，# 标题分章。" /></label><Button disabled={importing || !textBody.trim()} onClick={() => void handleText()}>{importing ? '正在导入…' : '导入为可阅读的书'}</Button></div>}
       <div className="privacy-note"><strong>Local-first by design</strong><span>解析在浏览器内完成，书籍内容不会离开你的设备。</span></div>
     </Modal>}
+    {viewsOpen && <Modal title="保存的视图" eyebrow="SAVED VIEWS" onClose={() => setViewsOpen(false)}><div className="views-modal"><p className="modal-lead">把当前的搜索、排序、筛选与标签组合存成命名视图，下次一键回到同一视角。</p>
+      {views && views.length ? <ul className="views-list">{views.map((view) => <li key={view.id} className={viewMatches(view, currentView) ? 'current' : ''}><button className="view-apply" onClick={() => applyView(view)}><Bookmark size={15} /><span>{view.name}</span><small>{[view.tag && `#${view.tag}`, view.sortMode === 'match' && '难度匹配', view.onlyIdeal && '只看 i+1', view.query && `“${view.query}”`].filter(Boolean).join(' · ') || '全部书籍'}</small></button>{onDeleteView && <button className="icon-button subtle" onClick={() => onDeleteView(view.id)} aria-label={`删除视图 ${view.name}`}><Trash2 size={15} /></button>}</li>)}</ul> : <p className="views-empty">还没有保存的视图。设置好筛选后，在下面给它起个名字。</p>}
+      {onSaveView && <form className="view-save" onSubmit={(event) => { event.preventDefault(); const name = viewName.trim(); if (!name) return; onSaveView({ name, ...currentView }); setViewName(''); }}><input value={viewName} onChange={(event) => setViewName(event.target.value)} placeholder="视图名称，如「本周 i+1」「科幻 #scifi」" aria-label="视图名称" /><Button type="submit" disabled={!viewName.trim()}><Plus size={15} />保存当前视图</Button></form>}
+    </div></Modal>}
+    {tagEditBook && <Modal title={`给《${tagEditBook.title}》加标签`} eyebrow="TAGS" onClose={() => setTagEditBook(null)}><div className="tag-modal"><p className="modal-lead">用标签把书归进收藏集（如「科幻」「在读」「待复习」），多个标签用逗号分隔。</p><input className="tag-input" value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="科幻，在读 …" aria-label="标签" />
+      {tags.length > 0 && <div className="tag-suggestions"><span>快速添加：</span>{tags.map((tag) => <button key={tag} className="filter-chip" onClick={() => setTagDraft((prev) => (parseTags(prev).some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...parseTags(prev), tag].join('，'))) }>{tag}</button>)}</div>}
+      <div className="modal-actions"><Button variant="ghost" onClick={() => setTagEditBook(null)}>取消</Button><Button onClick={() => { if (onSetTags) onSetTags(tagEditBook.id, parseTags(tagDraft)); setTagEditBook(null); }}><Tags size={16} />保存标签</Button></div>
+    </div></Modal>}
   </div>;
 }

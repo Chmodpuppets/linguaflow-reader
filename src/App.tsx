@@ -16,7 +16,7 @@ import { computeKnownWords } from './lib/knownWords';
 import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
 import { breakLongParagraphs } from './lib/sentence';
 import { BUILTIN_BOOK_IDS, builtinShelfEnabled } from './lib/builtinShelf';
-import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
+import type { AppData, Book, Highlight, LibraryView, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
 // 拆成独立 chunk 后，首页只下载书库 + 词汇 + 外壳，首屏从 682KB 降到百来 KB 量级。
@@ -128,6 +128,7 @@ export default function App() {
             sentences: stored.sentences || [],
             wordStates: stored.wordStates || {},
             glosses: { ...gradedGlosses, ...(stored.glosses || {}) },
+            libraryViews: stored.libraryViews || [],
           };
           // 老数据里可能没有后来新增的内置书：按 id 补齐，不动用户的词汇/笔记/进度
           const missing = initialData.books.filter((book) => !migrated.books.some((existing) => existing.id === book.id));
@@ -195,6 +196,10 @@ export default function App() {
   const closeConfirm = (ok: boolean) => { confirmState?.resolve(ok); setConfirmState(null); };
   const updateBook = (id: string, update: Partial<Book>) => setData((current) => ({ ...current, books: current.books.map((book) => book.id === id ? { ...book, ...update } : book) }));
   const updateSettings = (settings: Partial<ReaderSettings>) => setData((current) => ({ ...current, settings: { ...current.settings, ...settings } }));
+  // 书库组织：标签 + 保存的视图。
+  const setBookTags = (id: string, tags: string[]) => updateBook(id, { tags });
+  const saveLibraryView = (view: Omit<LibraryView, 'id'>) => setData((current) => ({ ...current, libraryViews: [...(current.libraryViews || []), { ...view, id: makeId('view') }] }));
+  const deleteLibraryView = (id: string) => setData((current) => ({ ...current, libraryViews: (current.libraryViews || []).filter((view) => view.id !== id) }));
   const openBook = (book: Book) => {
     // 本机可选书籍的正文来自 fetch('/local-content/*.json')；没到位时给一句人话而不是空白页
     if (book.source === 'sample' && !book.chapters?.length) { notify('这本原书的正文还在解压，稍等一下下…'); return; }
@@ -365,7 +370,7 @@ export default function App() {
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {
-    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {} });
+    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {}, libraryViews: restored.libraryViews || [] });
     setActiveBookId(null);
     setPage('library');
     notify('备份已恢复，欢迎回到你的阅读空间');
@@ -375,7 +380,7 @@ export default function App() {
 
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
-  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} />;
+  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} views={data.libraryViews || []} onSaveView={saveLibraryView} onDeleteView={deleteLibraryView} onSetTags={setBookTags} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} sentences={data.sentences || []} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} onBulkDelete={deleteVocabMany} onImportKnown={importKnownWords} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} sentences={data.sentences || []} onReview={addReview} onReviewSentence={reviewSentence} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;

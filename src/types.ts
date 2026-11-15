@@ -31,6 +31,18 @@ export interface Book {
   coverImage?: string;
   /** CEFR 分级标签（A1–B2），用于分级入门书架与难度展示。 */
   level?: string;
+  /** 用户自定义标签（收藏集），用于书库筛选与组织。旧数据无此字段时回退 []。 */
+  tags?: string[];
+}
+
+/** 书库「保存的视图」：把当前的搜索 / 排序 / 筛选 / 标签组合存成命名视图，一键复用。 */
+export interface LibraryView {
+  id: string;
+  name: string;
+  query: string;
+  sortMode: 'default' | 'match';
+  onlyIdeal: boolean;
+  tag: string;
 }
 
 export interface DictionaryEntry {
@@ -166,6 +178,8 @@ export interface AppData {
   wordStates?: Record<string, WordState>;
   /** 常驻注音释义缓存（word→{zh,phonetic}）。旧备份无此字段时回退 {}。 */
   glosses?: Record<string, WordGloss>;
+  /** 书库保存的视图。旧备份无此字段时回退 []。 */
+  libraryViews?: LibraryView[];
   settings: ReaderSettings;
 }
 

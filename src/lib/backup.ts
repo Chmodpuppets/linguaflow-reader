@@ -16,13 +16,14 @@ export function validateBackup(parsed: unknown): AppData {
   const num = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
   (raw.books as unknown[]).forEach((item, index) => {
     const book = item as Record<string, unknown>;
-    if (!book || !str(book.id) || !str(book.title) || !['sample', 'epub', 'text'].includes(String(book.source)) || !Array.isArray(book.chapters)) throw new Error(`第 ${index + 1} 本书的条目损坏（缺少 id / 标题 / 章节）`);
+    if (!book || !str(book.id) || !str(book.title) || !['sample', 'epub', 'text', 'pdf'].includes(String(book.source)) || !Array.isArray(book.chapters)) throw new Error(`第 ${index + 1} 本书的条目损坏（缺少 id / 标题 / 章节）`);
+    if (book.tags !== undefined && (!Array.isArray(book.tags) || (book.tags as unknown[]).some((t) => !str(t)))) throw new Error(`《${String(book.title)}》的标签格式不正确`);
     (book.chapters as unknown[]).forEach((chapter) => {
       const ch = chapter as Record<string, unknown>;
       if (!ch || !str(ch.id) || !str(ch.title) || !Array.isArray(ch.paragraphs) || (ch.paragraphs as unknown[]).some((p) => !str(p))) throw new Error(`《${String(book.title)}》的章节数据损坏`);
     });
-    // 导入的 EPUB / 文本必须有正文；样书正文由 hydrate 从静态内容还原，允许空 chapters。
-    if ((book.source === 'epub' || book.source === 'text') && !(book.chapters as unknown[]).length) throw new Error(`《${String(book.title)}》没有可阅读的章节`);
+    // 导入的 EPUB / 文本 / PDF 必须有正文；样书正文由 hydrate 从静态内容还原，允许空 chapters。
+    if ((book.source === 'epub' || book.source === 'text' || book.source === 'pdf') && !(book.chapters as unknown[]).length) throw new Error(`《${String(book.title)}》没有可阅读的章节`);
   });
   (raw.vocabulary as unknown[]).forEach((item, index) => {
     const entry = item as Record<string, unknown>;
@@ -57,6 +58,14 @@ export function validateBackup(parsed: unknown): AppData {
   if (raw.glosses !== undefined) {
     if (!raw.glosses || typeof raw.glosses !== 'object' || Array.isArray(raw.glosses)) throw new Error('注音释义缓存格式不正确');
     for (const value of Object.values(raw.glosses as Record<string, unknown>)) { const gloss = value as Record<string, unknown>; if (!gloss || !str(gloss.zh)) throw new Error('注音释义缓存损坏'); }
+  }
+  // 保存的视图是后加字段：旧备份没有时跳过（恢复端回退 []），有则逐条校验。
+  if (raw.libraryViews !== undefined) {
+    if (!Array.isArray(raw.libraryViews)) throw new Error('保存的视图列表格式不正确');
+    (raw.libraryViews as unknown[]).forEach((item, index) => {
+      const view = item as Record<string, unknown>;
+      if (!view || !str(view.id) || !str(view.name) || !str(view.query) || !['default', 'match'].includes(String(view.sortMode)) || typeof view.onlyIdeal !== 'boolean' || !str(view.tag)) throw new Error(`第 ${index + 1} 个保存的视图损坏`);
+    });
   }
   return parsed as AppData;
 }

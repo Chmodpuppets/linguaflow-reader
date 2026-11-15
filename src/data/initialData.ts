@@ -37,4 +37,5 @@ export const initialData: AppData = {
   // 让「注音阅读」这一核心价值在第一次交互就可感知；用户可自行改标。
   wordStates: shelfOn ? { hare: 'learning', tortoise: 'learning', race: 'learning', steady: 'learning', finish: 'learning' } : {},
   glosses: { ...gradedGlosses },
+  libraryViews: [],
 };
