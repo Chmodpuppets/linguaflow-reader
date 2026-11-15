@@ -19,6 +19,9 @@ test-results/
 # 由 scripts/copy-ort-assets.mjs 在 dev/build 前生成（14MB ONNX 运行时）
 public/wasm/
 
+# 由 scripts/copy-pdf-assets.mjs 在 dev/build 前生成（pdf.js 标准字体 + CMap）
+public/pdfjs/
+
 # 自托管 Whisper 模型（可选，见 README「本地模型源」）
 public/models/
 

@@ -37,7 +37,7 @@ async function buildGatsbyEpub(): Promise<Buffer> {
 async function importFixture(page: import('@playwright/test').Page) {
   const buffer = await buildGatsbyEpub();
   await page.goto('/');
-  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.getByRole('button', { name: '导入书籍' }).click();
   await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'gatsby.epub', mimeType: 'application/epub+zip', buffer });
   // 导入成功后 App 直接打开该书（setActiveBookId），落在阅读器而非书库。
   await expect(page.locator('.reader-page')).toBeVisible();
@@ -192,7 +192,7 @@ async function buildDivEpub(): Promise<Buffer> {
 test('div / br 分段的 EPUB 保留自然段，不拼成一坨', async ({ page }) => {
   const buffer = await buildDivEpub();
   await page.goto('/');
-  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.getByRole('button', { name: '导入书籍' }).click();
   await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'div.epub', mimeType: 'application/epub+zip', buffer });
   await expect(page.locator('.reader-page')).toBeVisible();
   const paragraphs = page.locator('.chapter-body p');
@@ -233,7 +233,7 @@ for (const mode of ['epub2', 'epub3'] as const) {
   test(`提取 EPUB 真实封面（${mode}）：书库展示封面图而非生成封面`, async ({ page }) => {
     const buffer = await buildCoverEpub(mode);
     await page.goto('/');
-    await page.getByRole('button', { name: '导入 EPUB' }).click();
+    await page.getByRole('button', { name: '导入书籍' }).click();
     await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'covered.epub', mimeType: 'application/epub+zip', buffer });
     await expect(page.locator('.reader-page')).toBeVisible();
     // 回到书库查看封面。

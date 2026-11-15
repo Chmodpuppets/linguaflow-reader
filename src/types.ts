@@ -20,7 +20,7 @@ export interface Book {
   currentParagraph: number;
   addedAt: string;
   lastReadAt?: string;
-  source: 'sample' | 'epub' | 'text';
+  source: 'sample' | 'epub' | 'text' | 'pdf';
   /** 每页对应的扫描图路径（page number → image url）。存在即可切换「看图」模式。 */
   pageImages?: Record<number, string>;
   /** 每页 OCR 文本块坐标（Vision 归一化坐标，原点左下）。用于图片模式的点词查义。 */

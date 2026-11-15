@@ -248,7 +248,7 @@ export default function App() {
   const deleteBook = async (id: string) => {
     const book = data.books.find((item) => item.id === id);
     // 内置样书来自 STATIC_CONTENT，删了下次 hydrate 又会回来，只允许删自己导入的 EPUB / 文本。
-    if (!book || (book.source !== 'epub' && book.source !== 'text')) return;
+    if (!book || (book.source !== 'epub' && book.source !== 'text' && book.source !== 'pdf')) return;
     const ok = await askConfirm({ title: '删除书籍', message: `确定删除《${book.title}》吗？这本书的笔记、词条、复习记录和练习记录也会一并移除。`, confirmLabel: '删除', danger: true });
     if (!ok) return;
     setData((current) => {
@@ -342,8 +342,9 @@ export default function App() {
   const importBook = async (file: File) => {
     const isText = /\.(txt|md|markdown)$/i.test(file.name) || file.type === 'text/plain' || file.type === 'text/markdown';
     if (isText) { await importText(file.name.replace(/\.(txt|md|markdown)$/i, ''), await file.text()); return; }
+    const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
     if (file.size > MAX_EPUB_BYTES) {
-      const message = `文件 ${(file.size / 1048576).toFixed(0)}MB 超过 60MB 上限：EPUB 会整份解包进内存，请先拆分或换体积更小的版本。`;
+      const message = `文件 ${(file.size / 1048576).toFixed(0)}MB 超过 60MB 上限：EPUB / PDF 会整份解包进内存，请先拆分或换体积更小的版本。`;
       notify(message);
       throw new Error(message);
     }
@@ -354,12 +355,13 @@ export default function App() {
     setImporting(true);
     setImportProgress({ phase: 'reading', progress: 0, label: '准备读取文件…' });
     try {
-      const { importEpub } = await import('./lib/epub');
-      const book = await importEpub(file, setImportProgress);
+      const book = isPdf
+        ? await (await import('./lib/pdfBook')).importPdf(file, setImportProgress)
+        : await (await import('./lib/epub')).importEpub(file, setImportProgress);
       setData((current) => ({ ...current, books: [book, ...current.books] }));
       setActiveBookId(book.id);
       notify(`已导入《${book.title}》，共 ${book.chapters.length} 个章节`);
-    } catch (error) { notify(error instanceof Error ? error.message : 'EPUB 导入失败，请检查文件。', 'error'); throw error; }
+    } catch (error) { notify(error instanceof Error ? error.message : '导入失败，请检查文件。', 'error'); throw error; }
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {

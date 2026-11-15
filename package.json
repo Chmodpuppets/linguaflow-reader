@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "prepare:wasm": "node scripts/copy-ort-assets.mjs",
+    "prepare:pdf": "node scripts/copy-pdf-assets.mjs",
     "export:local-content": "node scripts/export-local-content.mjs",
     "prepare:public": "node scripts/prepare-public.mjs",
     "sync:public": "node scripts/sync-public.mjs",
-    "predev": "npm run prepare:wasm",
+    "predev": "npm run prepare:wasm && npm run prepare:pdf",
     "dev": "vite --host 127.0.0.1 --port 3012",
-    "prebuild": "npm run prepare:wasm",
+    "prebuild": "npm run prepare:wasm && npm run prepare:pdf",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 3012",
     "test:e2e": "playwright test",
@@ -23,6 +24,7 @@
     "@huggingface/transformers": "^4.3.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

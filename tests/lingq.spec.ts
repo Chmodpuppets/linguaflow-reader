@@ -82,7 +82,7 @@ test('听写复习：听音拼写，判定并给出正确拼写', async ({ page 
 
 test('TXT 文件导入 + 每日目标可调', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.getByRole('button', { name: '导入书籍' }).click();
   await page.locator('input[type="file"][accept*="epub"]').setInputFiles({ name: 'article.txt', mimeType: 'text/plain', buffer: Buffer.from('The morning light fell across the quiet street.\n\nA child laughed somewhere beyond the gate.') });
   await expect(page.locator('.reader-page')).toBeVisible();
   await expect(page.locator('.chapter-body')).toContainText('morning light');

@@ -8,7 +8,7 @@ test('默认空书架 + 一次导入多本', async ({ page }) => {
   await expect(page.locator('.book-card')).toHaveCount(0);
   await expect(page.getByText('书架还是空的')).toBeVisible();
 
-  await page.getByRole('button', { name: '导入 EPUB' }).click();
+  await page.getByRole('button', { name: '导入书籍' }).click();
   await page.locator('.dropzone input[type="file"]').setInputFiles([
     { name: 'book-one.txt', mimeType: 'text/plain', buffer: Buffer.from('The first book begins here.\n\nA second paragraph follows.') },
     { name: 'book-two.txt', mimeType: 'text/plain', buffer: Buffer.from('Another book opens quietly.\n\nIts second paragraph waits.') },
