@@ -7,6 +7,7 @@ import type { WhisperModelId } from './whisper';
 import { saveAlignment, saveBookAudio } from './db';
 import { registerAlignment } from './audioAlign';
 import { notifyBookAudioChanged } from './bookAudio';
+import { cuesToChunks, type SubtitleCue } from './subtitle';
 
 // ── 音频 + 文本一键建课 ───────────────────────────────────────────────────────
 // 把「一段音频（+ 可选文稿）」一步变成可阅读、可点词、可句级跟读定位的课程：
@@ -27,7 +28,7 @@ export interface BuildLessonOptions {
 export interface LessonResult {
   book: Book;
   alignment: BookAlignment;
-  mode: 'transcribed' | 'aligned';
+  mode: 'transcribed' | 'aligned' | 'subtitle';
 }
 
 /** 把转写句子按 perGroup 句合并成自然段（音频逐句太碎，合并后更易读）。纯函数。 */
@@ -124,4 +125,53 @@ export async function buildLesson(audio: Blob, options: BuildLessonOptions = {})
   notifyBookAudioChanged(id);
   onProgress?.({ phase: 'done', progress: 100, label: '课程已就绪' });
   return { book, alignment, mode };
+}
+
+export interface SubtitleLessonOptions {
+  title?: string;
+  /** 可选配套音频/视频：提供则绑定供播放；不提供也能阅读 + 拥有精确时间轴（之后可再绑音频）。 */
+  audio?: Blob;
+  onProgress?: (progress: AlignProgress) => void;
+}
+
+/**
+ * 字幕一键建课：SRT/VTT 字幕句自带精确起止时间 → 书 + 句级时间轴，无需语音识别。
+ * 配套音频可选：有则绑定播放，无则仍可阅读、点词、看时间轴（日后可在阅读器里补绑音频）。
+ */
+export async function buildLessonFromSubtitles(cues: SubtitleCue[], options: SubtitleLessonOptions = {}): Promise<LessonResult> {
+  const { onProgress, audio } = options;
+  const chunks = cuesToChunks(cues);
+  const lines = chunksToAlignedLines(chunks);
+  if (lines.length < 2) throw new Error('字幕里没有足够的语句。请确认是有效的 SRT / VTT 字幕文件。');
+  if (audio && audio.size > MAX_ALIGN_BYTES) {
+    throw new Error(`音频 ${(audio.size / 1048576).toFixed(1)}MB 超过 ${MAX_ALIGN_BYTES / 1048576}MB 上限。请剪出要练的片段再建课。`);
+  }
+  onProgress?.({ phase: 'align', progress: 50, label: '整理课文与时间轴…' });
+  const id = makeId('book');
+  const title = options.title?.trim() || '字幕课程';
+  const chapters = chunksToChapters(id, chunks);
+  const duration = cues.reduce((max, cue) => Math.max(max, cue.end), 0);
+  const book: Book = {
+    id,
+    title,
+    author: '字幕建课',
+    description: `由字幕建课 · ${chapters.length} 个章节 · ${lines.length} 句 · 精确时间轴`,
+    cover: '',
+    accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
+    chapters,
+    progress: 0,
+    currentChapter: 0,
+    currentParagraph: 0,
+    addedAt: new Date().toISOString(),
+    source: 'text',
+    tags: ['字幕建课'],
+  };
+  const alignment: BookAlignment = { version: 1, bookId: id, createdAt: new Date().toISOString(), duration, lineCount: lines.length, lines };
+  onProgress?.({ phase: 'save', progress: 90, label: audio ? '保存音频与句级定位…' : '保存句级定位…' });
+  if (audio) await saveBookAudio(id, audio);
+  await saveAlignment(id, alignment);
+  registerAlignment(id, alignment.lines);
+  notifyBookAudioChanged(id);
+  onProgress?.({ phase: 'done', progress: 100, label: '课程已就绪' });
+  return { book, alignment, mode: 'subtitle' };
 }

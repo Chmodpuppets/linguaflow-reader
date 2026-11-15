@@ -1,8 +1,8 @@
 import { test, expect } from './base';
 
-// 音频一键建课 UI：导入弹窗新增「音频建课」tab；选音频后建课按钮可用。
+// 音频/字幕一键建课 UI：导入弹窗「音频/字幕建课」tab；选音频后建课按钮可用。
 // 完整转写依赖本地 Whisper 模型（headless 下载/推理不稳定），算法由 lessonBuilder 单测覆盖，
-// 转写链路复用已验证的 bookAlignment 基础设施，这里只做 UI 冒烟。
+// 转写链路复用已验证的 bookAlignment 基础设施，这里只做 UI 冒烟。字幕全流程见 subtitle.spec.ts。
 
 // 最小合法 WAV（44 字节头 + 少量静音样本），仅用于触发文件选择，不做真实转写。
 function tinyWav(): Buffer {
@@ -16,14 +16,15 @@ function tinyWav(): Buffer {
   return buf;
 }
 
-test('导入弹窗「音频建课」tab 渲染建课工具，未选音频时按钮禁用', async ({ page }) => {
+test('导入弹窗「音频/字幕建课」tab 渲染建课工具，未选文件时按钮禁用', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.goto('/');
-  await page.getByRole('button', { name: '音频建课' }).first().click();
+  await page.getByRole('button', { name: '音频/字幕建课' }).first().click();
   await expect(page.locator('.lesson-builder')).toBeVisible();
   await expect(page.locator('.lesson-intro')).toContainText('把一段音频变成可跟读的课程');
-  await expect(page.locator('.lesson-audio')).toContainText('选择音频文件');
+  await expect(page.locator('.lesson-subtitle')).toContainText('选择字幕文件');
+  await expect(page.locator('.lesson-audio-file')).toContainText('选择音频文件');
   await expect(page.locator('.lesson-builder select')).toBeVisible();
   await expect(page.getByRole('button', { name: /一键建课/ })).toBeDisabled();
   expect(pageErrors).toEqual([]);
@@ -33,12 +34,12 @@ test('选择音频文件后显示文件名并启用建课按钮', async ({ page 
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.goto('/');
-  await page.getByRole('button', { name: '音频建课' }).first().click();
+  await page.getByRole('button', { name: '音频/字幕建课' }).first().click();
   await expect(page.locator('.lesson-builder')).toBeVisible();
-  await page.locator('.lesson-audio input[type="file"]').setInputFiles({ name: 'my-talk.wav', mimeType: 'audio/wav', buffer: tinyWav() });
-  await expect(page.locator('.lesson-audio-meta strong')).toHaveText('my-talk.wav');
+  await page.locator('.lesson-audio-file input[type="file"]').setInputFiles({ name: 'my-talk.wav', mimeType: 'audio/wav', buffer: tinyWav() });
+  await expect(page.locator('.lesson-audio-file .lesson-audio-meta strong')).toHaveText('my-talk.wav');
   await expect(page.getByRole('button', { name: /一键建课/ })).toBeEnabled();
-  // 标题自动取自文件名（.field 里的标题输入框，排除隐藏的音频 file input）
+  // 标题自动取自文件名（.field 里的标题输入框，排除隐藏的 file input）
   await expect(page.locator('.lesson-builder .field input').first()).toHaveValue('my-talk');
   expect(pageErrors).toEqual([]);
 });
