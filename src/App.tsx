@@ -6,7 +6,7 @@ import Library from './components/Library';
 import { initialData } from './data/initialData';
 import { gradedGlosses } from './data/gradedReaders';
 import { loadBuiltinBooks } from './data/builtinBooks';
-import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, type StorageChannel } from './lib/db';
+import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, subscribeExternalSave, type StorageChannel } from './lib/db';
 import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
@@ -88,6 +88,10 @@ export default function App() {
   const [storageChannel, setStorageChannel] = useState<StorageChannel>('indexeddb');
   const saveTimer = useRef<number | null>(null);
   const toastTimer = useRef(0);
+  // 跨标签页同步：revRef 记录本标签已知的最新修订号；adoptingRef 标记「这次 data 变更来自外部采纳」，
+  // 采纳的快照已由发送方落盘，本标签不再重复写盘/广播（否则会与其它标签互相回放）。
+  const revRef = useRef(0);
+  const adoptingRef = useRef(false);
   // 应用内确认弹窗（替代原生 confirm）：askConfirm 返回 Promise，ESC/遮罩/取消都 resolve(false)。
   const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null);
   const activeBook = data.books.find((book) => book.id === activeBookId) || null;
@@ -118,6 +122,7 @@ export default function App() {
         if (cancelled) return;
         setStorageChannel(getStorageChannel());
         if (stored) {
+          revRef.current = stored.rev || 0;
           // 默认空书架：清掉旧版预置的样书/分级/经典（用户自导入的书不受影响）。
           const keptBooks = builtinShelfEnabled() ? stored.books : stored.books.filter((book) => !BUILTIN_BOOK_IDS.has(book.id));
           const migrated: AppData = {
@@ -169,8 +174,17 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return;
-    // 只存瘦身后的书 + 防抖，翻页/标记不再整本书序列化
-    const snapshot = { ...data, books: slimForStorage(data.books) };
+    // 这次变更来自其它标签页的采纳：快照已由发送方落盘，本标签不再重复写/广播，避免互相回放。
+    // 同时取消本标签可能仍在排队的旧写盘定时器，免得它稍后把更旧的快照覆盖回去。
+    if (adoptingRef.current) {
+      adoptingRef.current = false;
+      if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
+      return;
+    }
+    // 只存瘦身后的书 + 防抖，翻页/标记不再整本书序列化；rev 单调递增，供其它标签页判断新旧。
+    const rev = revRef.current + 1;
+    revRef.current = rev;
+    const snapshot = { ...data, rev, books: slimForStorage(data.books) };
     // 双通道（IndexedDB + localStorage）都写失败时给用户一句话，不再静默吞掉。
     const persist = () => { void saveData(snapshot).then(() => {
       setStorageChannel(getStorageChannel());
@@ -184,6 +198,29 @@ export default function App() {
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
   }, [data, ready]);
+
+  // 跨标签页采纳：其它标签页写盘后，本标签若拿到更新的 rev 就采纳整份快照（而不是用自己旧的覆盖回去）。
+  // 这样「一个标签收藏了词，另一个标签改设置」不会再抹掉刚收藏的词。只采纳比本地更新的修订，避免回放过时数据。
+  useEffect(() => {
+    if (!ready) return;
+    const adopt = (incoming: AppData) => {
+      const incomingRev = incoming.rev || 0;
+      if (incomingRev <= revRef.current) return;
+      revRef.current = incomingRev;
+      adoptingRef.current = true;
+      setData({
+        ...incoming,
+        books: hydrateBooks(incoming.books || []),
+        vocabulary: (incoming.vocabulary || []).map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
+        voiceRecords: incoming.voiceRecords || [],
+        sentences: incoming.sentences || [],
+        wordStates: incoming.wordStates || {},
+        glosses: { ...gradedGlosses, ...(incoming.glosses || {}) },
+        libraryViews: incoming.libraryViews || [],
+      });
+    };
+    return subscribeExternalSave(adopt, () => { void loadData().then((fresh) => { if (fresh) adopt(fresh); }); });
+  }, [ready]);
 
   // 清掉上一条的定时器：否则前一条的 3200ms 到期会提前清掉后一条 toast。
   const notify = (message: string, tone: 'success' | 'error' = 'success', undo?: () => void) => {
@@ -376,6 +413,8 @@ export default function App() {
     finally { setImporting(false); setImportProgress(null); }
   };
   const restore = (restored: AppData) => {
+    // 恢复备份是「以这份为准」的主动操作：把修订号抬到不低于备份自身，确保随后写盘能盖过其它标签页并被它们采纳。
+    revRef.current = Math.max(revRef.current, restored.rev || 0);
     setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {}, libraryViews: restored.libraryViews || [] });
     setActiveBookId(null);
     setPage('library');

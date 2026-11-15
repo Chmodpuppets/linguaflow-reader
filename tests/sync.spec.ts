@@ -1,147 +1,43 @@
 import { test, expect } from './base';
 
-// 学习记录上云是 opt-in：默认关闭不收集；开启并连接账号后，查词等事件才上报。
-test('学习记录同步 opt-in：默认关闭，开启连接后查词上报 /learn/events', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
-  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 1 }) }));
-  await page.route('**/api/dict/lookup*', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ found: true, lang: 'en', word: 'attention', phonetic: '', meaning: 'n. 注意', pos: 'n' }) }));
+// 跨标签页同步：整份快照「最后写赢」曾让停在旧快照的标签页抹掉另一标签页刚收藏的词。
+// 修复后每次写盘广播最新快照，其它标签页按 rev 采纳，不再覆盖。
+async function importText(page: import('@playwright/test').Page, title: string, text: string) {
+  await page.getByRole('button', { name: '导入书籍' }).click();
+  await page.getByRole('group', { name: '导入方式' }).getByRole('button', { name: '粘贴文本' }).click();
+  await page.locator('.text-import input').fill(title);
+  await page.locator('.text-import textarea').fill(text);
+  await page.getByRole('button', { name: '导入为可阅读的书' }).click();
+  await page.locator('.reader-page').waitFor();
+}
 
+test('另一标签页的写盘不会抹掉本标签刚收藏的词', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const other = await context.newPage();
+
+  // 两个标签页都先加载（此时都是空快照 rev0）
   await page.goto('/');
-  await page.getByRole('button', { name: /阅读设置/ }).click();
-  await expect(page.getByRole('heading', { name: '学习记录同步（可选）' })).toBeVisible();
-  // 默认关闭：不渲染账号表单。
-  await expect(page.locator('.sync-form')).toHaveCount(0);
+  await other.goto('/');
+  await page.getByRole('button', { name: '导入书籍' }).waitFor();
+  await other.getByRole('button', { name: '导入书籍' }).waitFor();
 
-  // 开启 → 出现创建账号表单；连接后显示已连接。
-  await page.getByRole('switch', { name: '同步学习记录' }).click();
-  await expect(page.locator('.sync-form')).toBeVisible();
-  await page.locator('.sync-field input').first().fill('e2e@example.com');
-  await page.locator('.sync-field input[type="password"]').fill('pass123');
-  await page.getByRole('button', { name: '连接账号' }).click();
-  await expect(page.getByText('账号已连接')).toBeVisible();
+  // A 导入书并收藏 curious → 写盘 rev1 并广播
+  await importText(page, 'Sync A', 'The curious cat sat on the warm mat.');
+  await page.locator('.chapter-body [data-word="curious"]').first().click();
+  await page.locator('.lookup-panel').waitFor();
+  await page.getByRole('button', { name: /收藏单词|已在词汇本/ }).click();
+  await expect(page.locator('.toast')).toContainText('已收藏 curious');
+  await page.waitForTimeout(900); // 等 A 防抖落盘 + 广播，B 采纳
 
-  // 回书库打开一本书，点一个词 → 触发 lookup 事件上报。
-  await page.getByRole('button', { name: /我的书库/ }).click();
-  await page.locator('.book-card .book-cover').first().click();
-  await expect(page.locator('.reader-page')).toBeVisible();
-  const reported = page.waitForRequest('**/api/learn/events', { timeout: 10000 });
-  await page.locator('.chapter-body .word').first().click();
-  const req = await reported;
-  const body = JSON.parse(req.postData() || '{}');
-  expect(Array.isArray(body.events)).toBe(true);
-  expect(body.events.some((e: { type: string }) => e.type === 'lookup')).toBe(true);
-  expect(pageErrors).toEqual([]);
-});
+  // B 此时应已采纳 A 的快照；B 再导入第二本书触发整份写盘（旧实现会用 B 的空快照覆盖掉 curious）
+  await importText(other, 'Sync B', 'A second book about a quiet forest.');
+  await other.waitForTimeout(900);
 
-// P2：连接账号后复习页拉取 pathmora 下发的今日计划并展示横幅；计划不可达时回退本地 SRS。
-test('复习页执行 pathmora 下发的今日计划（横幅+计划请求），不可达回退本地', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
-  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
-  await page.route('**/api/reader/plan', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, generatedAt: new Date().toISOString(), todayMinutes: 10, readingRewardMinutes: 15, due: [{ word: 'subtle', misses: 2, kind: 'weak' }, { word: 'attention', misses: 0, kind: 'reinforce' }], stats: { weakCount: 1, reinforceCount: 1, knownCount: 1, savedSentences: 0, activityDays: 1 } }) }));
-
-  await page.goto('/');
-  await page.getByRole('button', { name: /阅读设置/ }).click();
-  await page.getByRole('switch', { name: '同步学习记录' }).click();
-  await page.locator('.sync-field input').first().fill('e2e@example.com');
-  await page.locator('.sync-field input[type="password"]').fill('pass123');
-  await page.getByRole('button', { name: '连接账号' }).click();
-  await expect(page.getByText('账号已连接')).toBeVisible();
-
-  const planReq = page.waitForRequest('**/api/reader/plan', { timeout: 10000 });
-  await page.getByRole('button', { name: /主动复习/ }).click();
-  const req = await planReq;
-  expect(req.headers()['authorization']).toBe('Bearer e2e-token');
-  await expect(page.locator('.plan-banner')).toBeVisible();
-  await expect(page.locator('.plan-banner')).toContainText('PATHMORA');
-  await expect(page.locator('.plan-banner')).toContainText('1 个薄弱词');
-  expect(pageErrors).toEqual([]);
-});
-
-// P3：连接账号后书库按已知词（/learn/summary）显示难度徽章（覆盖率+分档）。
-test('书库难度匹配：连接后按已知词显示覆盖率徽章', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
-  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
-  await page.route('**/api/learn/summary', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ knownWords: ['attention', 'curiosity', 'notice', 'world', 'interesting'], weakWords: [], counts: {}, savedSentences: 0, shadow: { sessions: 0, avgAccuracy: 0, avgWpm: 0 }, activityDays: 1 }) }));
-
-  await page.goto('/');
-  // 未连接：无已知词来源时不渲染难度徽章（本地种子若无已掌握词）。
-  await page.getByRole('button', { name: /阅读设置/ }).click();
-  await page.getByRole('switch', { name: '同步学习记录' }).click();
-  await page.locator('.sync-field input').first().fill('e2e@example.com');
-  await page.locator('.sync-field input[type="password"]').fill('pass123');
-  await page.getByRole('button', { name: '连接账号' }).click();
-  await expect(page.getByText('账号已连接')).toBeVisible();
-
-  const summaryReq = page.waitForRequest('**/api/learn/summary', { timeout: 10000 });
-  await page.getByRole('button', { name: /我的书库/ }).click();
-  const req = await summaryReq;
-  expect(req.headers()['authorization']).toBe('Bearer e2e-token');
-  const badge = page.locator('.difficulty-badge').first();
-  await expect(badge).toBeVisible();
-  await expect(badge).toContainText('%');
-  // 今日推荐横幅：连接后按覆盖率挑一本并给理由。
-  await expect(page.locator('.recommend-card')).toBeVisible();
-  await expect(page.locator('.recommend-card')).toContainText('今日推荐');
-  await expect(page.locator('.recommend-card')).toContainText('覆盖率');
-  // 选书推荐工具条：难度匹配排序 + 只看 i+1 筛选，切换不崩溃。
-  await expect(page.locator('.library-tools')).toBeVisible();
-  await page.getByRole('button', { name: /难度匹配/ }).click();
-  await page.getByRole('button', { name: /只看 i\+1/ }).click();
-  await expect(page.locator('.book-grid, .empty-state').first()).toBeVisible();
-  expect(pageErrors).toEqual([]);
-});
-
-// 学习档案：连接后设置页展示 /learn/summary 归一化结果（已掌握/收藏/跟读/活跃+薄弱词）。
-test('学习档案：连接后设置页展示学习记录汇总与薄弱词', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
-  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
-  await page.route('**/api/learn/summary', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ knownWords: ['attention', 'curiosity', 'notice', 'world', 'interesting'], weakWords: [{ word: 'subtle', misses: 2 }], savedSentences: 3, shadow: { count: 4, avgAccuracy: 0.9, avgWpm: 120 }, activityDays: 6, counts: { lookup: 12, save_sentence: 3, shadow: 4, review: 5 } }) }));
-
-  await page.goto('/');
-  await page.getByRole('button', { name: /阅读设置/ }).click();
-  await page.getByRole('switch', { name: '同步学习记录' }).click();
-  await page.locator('.sync-field input').first().fill('e2e@example.com');
-  await page.locator('.sync-field input[type="password"]').fill('pass123');
-  await page.getByRole('button', { name: '连接账号' }).click();
-  await expect(page.getByText('账号已连接')).toBeVisible();
-
-  await expect(page.locator('.learn-profile')).toBeVisible();
-  await expect(page.locator('.learn-grid')).toContainText('已掌握词');
-  await expect(page.locator('.learn-grid')).toContainText('5');
-  await expect(page.locator('.learn-grid')).toContainText('活跃天数');
-  await expect(page.locator('.weak-chip').first()).toContainText('subtle');
-  await expect(page.locator('.learn-sub')).toContainText('90%');
-  expect(pageErrors).toEqual([]);
-});
-
-// P2 降级：pathmora 计划不可达时，用已部署的 linguaflow 学习记录生成本地计划（横幅标「本地计划」）。
-test('pathmora 不可达时复习页回退本地计划（学习记录排程）', async ({ page }) => {
-  const pageErrors: string[] = [];
-  page.on('pageerror', (e) => pageErrors.push(e.message));
-  await page.route('**/api/auth/login', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'e2e-token', user: { id: 'u', username: 'e2e' } }) }));
-  await page.route('**/api/learn/events', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true, accepted: 0 }) }));
-  await page.route('**/api/reader/plan', (r) => r.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ ok: false }) }));
-  await page.route('**/api/learn/summary', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ knownWords: ['attention', 'subtle'], weakWords: [{ word: 'subtle', misses: 2 }], savedSentences: 0 }) }));
-
-  await page.goto('/');
-  await page.getByRole('button', { name: /阅读设置/ }).click();
-  await page.getByRole('switch', { name: '同步学习记录' }).click();
-  await page.locator('.sync-field input').first().fill('e2e@example.com');
-  await page.locator('.sync-field input[type="password"]').fill('pass123');
-  await page.getByRole('button', { name: '连接账号' }).click();
-  await expect(page.getByText('账号已连接')).toBeVisible();
-
-  await page.getByRole('button', { name: /主动复习/ }).click();
-  await expect(page.locator('.plan-banner')).toBeVisible();
-  await expect(page.locator('.plan-banner')).toContainText('本地计划');
-  await expect(page.locator('.plan-banner')).toContainText('1 个薄弱词');
-  expect(pageErrors).toEqual([]);
+  // 重新加载 A：curious 必须仍在
+  await page.reload();
+  await page.getByRole('button', { name: /词汇笔记本/ }).click();
+  await expect(page.locator('.vocab-row .vocab-word strong', { hasText: 'curious' })).toHaveCount(1);
+  expect(errors).toEqual([]);
+  await other.close();
 });

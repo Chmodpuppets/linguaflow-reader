@@ -182,6 +182,8 @@ export interface AppData {
   glosses?: Record<string, WordGloss>;
   /** 书库保存的视图。旧备份无此字段时回退 []。 */
   libraryViews?: LibraryView[];
+  /** 单调递增的数据修订号：跨标签页同步用来判断哪份快照更新，避免旧标签页整份覆盖新数据。旧备份无此字段时回退 0。 */
+  rev?: number;
   settings: ReaderSettings;
 }
 
