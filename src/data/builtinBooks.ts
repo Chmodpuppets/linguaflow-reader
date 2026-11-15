@@ -1,5 +1,6 @@
 import type { Book } from '../types';
 import { sampleBooks } from './sampleBooks';
+import { builtinShelfEnabled } from '../lib/builtinShelf';
 
 /**
  * 内置书全集 = 轻量样书 + **本机可选**的扫描书。
@@ -35,6 +36,8 @@ async function loadClassics(): Promise<Book[]> {
 
 /** 本机素材缺失 / 离线首启时直接返回样书，不再额外导出一个零引用的兜底函数。 */
 export async function loadBuiltinBooks(): Promise<Book[]> {
+  // 默认空书架（用户自导入）；仅测试/node 开关打开时才加载内置书。
+  if (!builtinShelfEnabled()) return [];
   const [optional, classics] = await Promise.all([loadOptionalBook(), loadClassics()]);
   const books = [...sampleBooks, ...classics];
   return optional ? [...books, optional] : books;

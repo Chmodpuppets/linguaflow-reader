@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // 词汇本：筛选/排序/批量选择/批量删除+撤销，全部 live。
 test('词汇本筛选+批量删除+撤销', async ({ page }) => {

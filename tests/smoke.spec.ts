@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test('首页加载：7 项导航齐全、书库可见、无未捕获异常', async ({ page }) => {
   const pageErrors: string[] = [];

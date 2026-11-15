@@ -2,6 +2,7 @@ import type { AppData, VocabEntry } from '../types';
 import { lookupWord } from './dictionary';
 import { sampleBooks } from './sampleBooks';
 import { gradedBooks, gradedGlosses } from './gradedReaders';
+import { builtinShelfEnabled } from '../lib/builtinShelf';
 
 const seedWords = ['attention', 'curiosity', 'deliberate', 'fleeting'];
 const seedVocabulary: VocabEntry[] = seedWords.map((word, index) => ({
@@ -21,16 +22,19 @@ const seedVocabulary: VocabEntry[] = seedWords.map((word, index) => ({
   reviewCount: index,
 }));
 
+// 默认（浏览器）空书架：用户自己导入 EPUB；测试/node 打开开关后恢复内置书与种子。
+const shelfOn = builtinShelfEnabled();
+
 export const initialData: AppData = {
-  books: [...sampleBooks, ...gradedBooks],
-  vocabulary: seedVocabulary,
-  highlights: [{ id: 'seed-highlight', bookId: 'art-of-noticing', chapterId: 'noticing-1', paragraphIndex: 4, text: 'The world is not finished being interesting.', note: '也许“保持好奇”不是天赋，而是愿意修改自己对世界的描述。', color: 'violet', createdAt: '2026-10-26T12:00:00.000Z' }],
+  books: shelfOn ? [...sampleBooks, ...gradedBooks] : [],
+  vocabulary: shelfOn ? seedVocabulary : [],
+  highlights: shelfOn ? [{ id: 'seed-highlight', bookId: 'art-of-noticing', chapterId: 'noticing-1', paragraphIndex: 4, text: 'The world is not finished being interesting.', note: '也许“保持好奇”不是天赋，而是愿意修改自己对世界的描述。', color: 'violet', createdAt: '2026-10-26T12:00:00.000Z' }] : [],
   reviewLogs: [],
   voiceRecords: [],
-  sentences: [{ id: 'seed-sentence', text: 'The world is not finished being interesting.', word: 'interesting', meaning: 'a. 有趣的, 引起好奇心的, 有意义的', phonetic: "'intristiŋ", bookId: 'art-of-noticing', bookTitle: 'The Art of Noticing', chapterId: 'noticing-1', chapterTitle: 'The world is not finished', paragraphIndex: 4, createdAt: '2026-10-26T12:00:00.000Z' }],
+  sentences: shelfOn ? [{ id: 'seed-sentence', text: 'The world is not finished being interesting.', word: 'interesting', meaning: 'a. 有趣的, 引起好奇心的, 有意义的', phonetic: "'intristiŋ", bookId: 'art-of-noticing', bookTitle: 'The Art of Noticing', chapterId: 'noticing-1', chapterTitle: 'The world is not finished', paragraphIndex: 4, createdAt: '2026-10-26T12:00:00.000Z' }] : [],
   settings: { fontSize: 19, lineHeight: 1.8, theme: 'midnight', reducedAmbient: true, annotationMode: 'learning' },
   // 冷启动示范：给入门 A1 书预置几个「学习中」词，新用户打开即见常驻注音，
   // 让「注音阅读」这一核心价值在第一次交互就可感知；用户可自行改标。
-  wordStates: { hare: 'learning', tortoise: 'learning', race: 'learning', steady: 'learning', finish: 'learning' },
+  wordStates: shelfOn ? { hare: 'learning', tortoise: 'learning', race: 'learning', steady: 'learning', finish: 'learning' } : {},
   glosses: { ...gradedGlosses },
 };

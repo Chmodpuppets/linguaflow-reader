@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // 常驻注音 + 词状态：标记学习中→原文出现 ruby；标记已掌握→注音移除（逐渐裸页）。
 test('词状态驱动常驻注音：学习中显示、已掌握移除，覆盖率随之变化', async ({ page }) => {

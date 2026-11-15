@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 /**
  * 覆盖之前只靠静态验证、没做过浏览器 E2E 的两处修复：

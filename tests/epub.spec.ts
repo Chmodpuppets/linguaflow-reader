@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 import JSZip from 'jszip';
 
 // 构造一本「Gatsby 式」EPUB：spine 里混入扉页 / 目录页（contents），

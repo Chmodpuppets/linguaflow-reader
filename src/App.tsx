@@ -15,6 +15,7 @@ import { getCachedKnownWords, isSyncEnabled, knownWordsStale, recordEvent, refre
 import { computeKnownWords } from './lib/knownWords';
 import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
 import { breakLongParagraphs } from './lib/sentence';
+import { BUILTIN_BOOK_IDS, builtinShelfEnabled } from './lib/builtinShelf';
 import type { AppData, Book, Highlight, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 
 // 阅读器只在一本书被打开时才需要；口语实验室/统计同理。
@@ -117,9 +118,11 @@ export default function App() {
         if (cancelled) return;
         setStorageChannel(getStorageChannel());
         if (stored) {
+          // 默认空书架：清掉旧版预置的样书/分级/经典（用户自导入的书不受影响）。
+          const keptBooks = builtinShelfEnabled() ? stored.books : stored.books.filter((book) => !BUILTIN_BOOK_IDS.has(book.id));
           const migrated: AppData = {
             ...stored,
-            books: hydrateBooks(stored.books),
+            books: hydrateBooks(keptBooks),
             vocabulary: stored.vocabulary.map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
             voiceRecords: stored.voiceRecords || [],
             sentences: stored.sentences || [],

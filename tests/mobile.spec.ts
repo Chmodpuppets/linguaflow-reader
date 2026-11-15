@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // 移动视口（Pixel 7，由 playwright.config 的 mobile-chrome project 注入）：
 // 桌面用例不覆盖的底部导航 / 抽屉导航 / 窄屏阅读器布局在这里验证。

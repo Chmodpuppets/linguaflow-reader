@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // 学习记录上云是 opt-in：默认关闭不收集；开启并连接账号后，查词等事件才上报。
 test('学习记录同步 opt-in：默认关闭，开启连接后查词上报 /learn/events', async ({ page }) => {

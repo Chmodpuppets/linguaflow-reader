@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // LingQ 式「导入任何文本」+ 学习仪表盘（已知词/连续天数/每日目标）。
 test('粘贴文本导入为书，标记已掌握后仪表盘已知词 +1', async ({ page }) => {

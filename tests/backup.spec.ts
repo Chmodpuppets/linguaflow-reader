@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test('非法备份用应用内 toast 提示，不弹原生 alert，页面不崩', async ({ page }) => {
   let dialogSeen = false;

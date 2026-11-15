@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 /**
  * 公开仓库不含 `public/local-content/*.json`（第三方书籍正文，不随仓库分发）。

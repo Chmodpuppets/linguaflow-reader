@@ -931,6 +931,7 @@ button.hero-book { cursor: pointer; font: inherit; }
 .dropzone.dragging { border-color: rgba(139,92,246,.6); background: rgba(139,92,246,.06); }
 .dropzone h3 { margin: 0; font-size: 15px; }
 .dropzone p { margin: 0; color: var(--muted); font-size: 11.5px; max-width: 420px; }
+.dropzone-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 .recommend-card.cold-start { border-color: rgba(52,211,153,.35); }
 .sentence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .voice-recorder { display: flex; flex-direction: column; gap: 16px; }

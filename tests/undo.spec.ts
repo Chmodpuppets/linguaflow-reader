@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 // 破坏性操作可撤销：删除标记/收藏句子后 toast 提供「撤销」，点击即恢复。
 test('删除标记后可撤销恢复', async ({ page }) => {
