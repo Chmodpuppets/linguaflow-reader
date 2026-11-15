@@ -940,3 +940,23 @@ button.hero-book { cursor: pointer; font: inherit; }
 .time-capsule { display: flex; flex-direction: column; gap: 12px; }
 .library-page,.vocabulary-page,.review-page,.notes-page,.settings-page,.voice-lab-page,.voice-analytics-page { width: 100%; }
 .cover-kicker { display: block; font-size: 7px; letter-spacing: .16em; opacity: .65; }
+
+/* 听写复习 */
+.dictation-content { display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; padding: 8px 0; }
+.dictation-play { display: flex; align-items: center; gap: 14px; }
+.dictation-play-btn { width: 74px; height: 74px; border-radius: 50%; border: 1px solid rgba(139,92,246,.45); background: rgba(139,92,246,.14); color: var(--text,#e2e8f0); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .15s ease, background .15s ease; }
+.dictation-play-btn:hover { background: rgba(139,92,246,.26); transform: scale(1.04); }
+.dictation-content form { display: flex; gap: 10px; width: 100%; max-width: 420px; }
+.dictation-content form input { flex: 1; min-width: 0; }
+
+/* 导出 / 已知词导入弹窗 */
+.modal-lead { color: var(--muted,#94a3b8); font-size: 13px; line-height: 1.7; margin: 0 0 16px; }
+.export-modal, .known-modal { display: flex; flex-direction: column; gap: 14px; }
+.check-row { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: var(--text,#e2e8f0); cursor: pointer; }
+.check-row input { width: 16px; height: 16px; accent-color: var(--primary,#8b5cf6); }
+.export-count { font-size: 12.5px; color: var(--muted,#94a3b8); }
+.export-count strong { color: var(--text,#e2e8f0); }
+.known-textarea { width: 100%; min-height: 150px; resize: vertical; border: 1px solid var(--line,rgba(148,163,184,.25)); border-radius: 12px; background: rgba(18,18,28,.7); color: var(--text,#e2e8f0); padding: 12px 14px; font-size: 13px; line-height: 1.7; outline: 0; font-family: inherit; }
+.known-textarea:focus { border-color: rgba(139,92,246,.5); }
+.known-file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) { .dictation-content form { flex-direction: column; } }

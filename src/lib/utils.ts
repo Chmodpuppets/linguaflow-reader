@@ -10,8 +10,8 @@ export function readingMinutes(bookParagraphs: number): number {
   return Math.max(2, Math.round(bookParagraphs * 1.4));
 }
 
-export function downloadJson(filename: string, value: unknown): void {
-  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+export function downloadText(filename: string, text: string, mime = 'text/plain'): void {
+  const blob = new Blob([text], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
@@ -19,4 +19,8 @@ export function downloadJson(filename: string, value: unknown): void {
   anchor.click();
   // 立即 revoke 会让部分浏览器（尤其 Safari）来不及启动下载；延迟回收。
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function downloadJson(filename: string, value: unknown): void {
+  downloadText(filename, JSON.stringify(value, null, 2), 'application/json');
 }

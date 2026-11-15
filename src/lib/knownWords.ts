@@ -19,3 +19,22 @@ export function computeKnownWords(
   const fromStates = Object.entries(wordStates || {}).filter(([, state]) => state === 'known').map(([word]) => word);
   return Array.from(new Set([...fromVocab, ...fromStates, ...syncKnown].map((word) => word.toLowerCase())));
 }
+
+/**
+ * 解析用户粘贴 / 上传的「已知词表」：按行 / 逗号 / 分号 / 空白切分，
+ * 只保留字母（含连字符 / 撇号）且 ≥2 字符的词，小写去重、保持顺序。
+ * 供「导入已知词」直接标为已掌握，喂给难度匹配。
+ */
+export function parseKnownWords(text: string): string[] {
+  const tokens = text.split(/[\n\r,;，；、\t ]+/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tokens) {
+    const word = raw.trim().toLowerCase().replace(/[’‘]/g, "'");
+    if (word.length < 2 || !/^[a-z][a-z'-]*$/.test(word)) continue;
+    if (seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
+  }
+  return out;
+}

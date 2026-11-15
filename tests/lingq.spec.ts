@@ -65,6 +65,21 @@ test('经典书架：打开爱丽丝读到真实多段公版正文', async ({ pa
   expect(pageErrors).toEqual([]);
 });
 
+test('听写复习：听音拼写，判定并给出正确拼写', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await page.goto('/');
+  await page.getByRole('button', { name: /主动复习/ }).click();
+  await page.getByRole('button', { name: '听写', exact: true }).click();
+  await page.getByRole('button', { name: /开始本次复习/ }).click();
+  await expect(page.getByRole('button', { name: '播放读音' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '慢速重听' })).toBeVisible();
+  await page.getByPlaceholder('把听到的单词拼写出来').fill('zzzznotaword');
+  await page.getByRole('button', { name: '检查答案' }).click();
+  await expect(page.locator('.cloze-feedback')).toContainText('正确拼写是');
+  expect(pageErrors).toEqual([]);
+});
+
 test('TXT 文件导入 + 每日目标可调', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '导入 EPUB' }).click();

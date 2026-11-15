@@ -317,6 +317,16 @@ export default function App() {
       };
     });
   };
+  // LingQ 式「导入已知词表」：把用户已认识的词直接标为已掌握，喂给难度匹配/覆盖率。
+  const importKnownWords = (words: string[]) => {
+    if (!words.length) { notify('没有解析到有效的单词（需为 ≥2 个字母的英文词）', 'error'); return; }
+    setData((current) => {
+      const states = { ...(current.wordStates || {}) };
+      for (const word of words) states[word] = 'known';
+      return { ...current, wordStates: states };
+    });
+    notify(`已把 ${words.length} 个词标为「已掌握」，选书难度会据此更新`, 'success');
+  };
   // LingQ 式「导入任何文本」：粘贴文章 / .txt / .md → 可阅读、可注音、可统计的书。
   const importText = async (title: string, text: string) => {
     setImporting(true);
@@ -364,7 +374,7 @@ export default function App() {
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
   else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} />;
-  else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} onBulkDelete={deleteVocabMany} />;
+  else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} sentences={data.sentences || []} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} onBulkDelete={deleteVocabMany} onImportKnown={importKnownWords} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} sentences={data.sentences || []} onReview={addReview} onReviewSentence={reviewSentence} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;
   else if (page === 'voice-analytics') content = <VoiceAnalytics records={data.voiceRecords} vocabulary={data.vocabulary} onPractice={() => setPage('voice-lab')} />;

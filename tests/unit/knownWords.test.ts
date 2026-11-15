@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeKnownWords } from '../../src/lib/knownWords';
+import { computeKnownWords, parseKnownWords } from '../../src/lib/knownWords';
 import type { ReviewLog, VocabEntry } from '../../src/types';
 
 const vocab = (id: string, word: string, familiarity: number) => ({ id, word, familiarity } as VocabEntry);
@@ -28,4 +28,13 @@ test('computeKnownWords：云端合并 + 小写去重', () => {
 
 test('computeKnownWords：全空返回空（离线无积累时不显示难度）', () => {
   assert.deepEqual(computeKnownWords([], [], {}, []), []);
+});
+
+test('parseKnownWords：按行/逗号/空格切分，小写去重、过滤非词', () => {
+  const out = parseKnownWords('Apple\nbanana, cherry; apple 123 x\nwell-known\tdon’t');
+  assert.deepEqual(out, ['apple', 'banana', 'cherry', 'well-known', "don't"]);
+});
+
+test('parseKnownWords：空输入返回空', () => {
+  assert.deepEqual(parseKnownWords('   \n , ; 123 '), []);
 });
