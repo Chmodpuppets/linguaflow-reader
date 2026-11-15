@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：127
-总大小：1.60 MB
+文件数：133
+总大小：1.63 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -41,6 +41,7 @@
 - `src/components/AppShell.tsx`
 - `src/components/AudioBar.tsx`
 - `src/components/AudioBinding.tsx`
+- `src/components/LessonBuilder.tsx`
 - `src/components/Library.tsx`
 - `src/components/Notes.tsx`
 - `src/components/OrphanAudioCleanup.tsx`
@@ -75,6 +76,7 @@
 - `src/lib/focus.ts`
 - `src/lib/knownWords.ts`
 - `src/lib/learning.ts`
+- `src/lib/lessonBuilder.ts`
 - `src/lib/libraryOrganize.ts`
 - `src/lib/pdfBook.ts`
 - `src/lib/pdfChapters.ts`
@@ -86,6 +88,7 @@
 - `src/lib/spacedShadowing.ts`
 - `src/lib/streak.ts`
 - `src/lib/textBook.ts`
+- `src/lib/translate.ts`
 - `src/lib/utils.ts`
 - `src/lib/voice.ts`
 - `src/lib/whisper.ts`
@@ -101,6 +104,7 @@
 - `tests/base.ts`
 - `tests/degrade.spec.ts`
 - `tests/epub.spec.ts`
+- `tests/lesson.spec.ts`
 - `tests/lingq.spec.ts`
 - `tests/mobile.spec.ts`
 - `tests/offline.spec.ts`
@@ -110,6 +114,7 @@
 - `tests/shelf.spec.ts`
 - `tests/smoke.spec.ts`
 - `tests/sync.spec.ts`
+- `tests/translate.spec.ts`
 - `tests/undo.spec.ts`
 - `tests/unit/alignment.test.ts`
 - `tests/unit/annotation.test.ts`
@@ -124,6 +129,7 @@
 - `tests/unit/graded.test.ts`
 - `tests/unit/knownWords.test.ts`
 - `tests/unit/learning.test.ts`
+- `tests/unit/lessonBuilder.test.ts`
 - `tests/unit/libraryOrganize.test.ts`
 - `tests/unit/lingq.test.ts`
 - `tests/unit/pdfBook.test.ts`

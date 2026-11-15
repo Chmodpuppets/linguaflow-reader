@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, Layers, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookMarked, BookmarkPlus, Check, ChevronLeft, ChevronRight, Copy, Headphones, Highlighter, Image as ImageIcon, Languages, Layers, List, Mic2, Minus, NotebookPen, Plus, Quote, Settings2, Sparkles, Type, Volume2, X } from 'lucide-react';
 import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, SelectionState, VocabEntry, VoiceRecord, WordGloss, WordState } from '../types';
 import { chapterStats, rubyGlossFor, type AnnotationMode } from '../lib/annotation';
 import { lookupWord, normalizeWord } from '../data/dictionary';
@@ -7,6 +7,7 @@ import { fetchRemoteDictionary } from '../lib/remoteDictionary';
 import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
 import { cleanPhrase, isMultiWord, phraseKey } from '../lib/phrase';
+import { translateSentence } from '../lib/translate';
 import { useBookAudioSrc } from '../lib/bookAudio';
 import { Button, Modal, ProgressBar } from './UI';
 import AudioBar from './AudioBar';
@@ -103,6 +104,9 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   // 短语 / 习语收藏：划选多词时把整个短语存进词汇本（不折叠成单词），释义由用户自填。
   const [phraseDraft, setPhraseDraft] = useState<{ text: string; context: string; paragraphIndex: number } | null>(null);
   const [phraseMeaning, setPhraseMeaning] = useState('');
+  // 整句机器翻译：按「被翻译的原文」缓存结果，换词 / 换句即作废，避免串义。
+  const [translation, setTranslation] = useState<{ for: string; text: string; source: string } | null>(null);
+  const [translating, setTranslating] = useState(false);
   const [voiceTarget, setVoiceTarget] = useState('');
   const [viewMode, setViewMode] = useState<'text' | 'image'>('text');
   const [zoom, setZoom] = useState(false);
@@ -137,9 +141,21 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   const lookupSentence = lookup ? extractSentence(lookup.context, lookup.word) : '';
   const sentenceSaved = lookup ? sentences.some((item) => item.bookId === book.id && item.text === lookupSentence) : false;
 
+  // 整句翻译：服务器 /translate 优先 → MyMemory 兜底；失败显示「暂无法翻译」，不阻塞阅读。
+  const doTranslate = async (text: string) => {
+    const target = text.trim();
+    if (!target || translating) return;
+    setTranslating(true);
+    setTranslation(null);
+    const result = await translateSentence(target);
+    setTranslating(false);
+    setTranslation({ for: target, text: result?.text || '', source: result?.source || '' });
+  };
+
   // 打开查词面板且本地未收录时，异步拉在线词典；切换词 / 关闭面板即作废上一次请求。
   useEffect(() => {
     setShowFullParagraph(false);
+    setTranslation(null);
     if (!lookup) { setRemote(null); setRemoteLoading(false); return; }
     const word = lookup.word;
     recordEvent({ type: 'lookup', word, bookId: book.id });
@@ -370,7 +386,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
       <aside className={`reader-aside glass-panel ${contentsOpen ? 'open' : ''}`}><div className="aside-heading"><div><span className="eyebrow">IN THIS BOOK</span><h3>目录</h3></div><button className="icon-button" onClick={() => setContentsOpen(false)}><X size={17} /></button></div><div className="toc-list">{book.chapters.map((item, index) => <button className={index === chapterIndex ? 'active' : ''} key={item.id} onClick={() => goToChapter(index)}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item.title}</strong>{index === chapterIndex && <ArrowRight size={15} />}</button>)}</div><div className="aside-note"><BookMarked size={18} /><strong>阅读数据在本机</strong><p>当前书籍、标记与词汇均可离线访问。</p></div></aside>
     </div>
     {audioSrc && audioOpen && <div className="reader-audio"><AudioBar book={book} src={audioSrc} page={pageNumber} onNotify={onNotify} /></div>}
-    {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button>{isMultiWord(selection.text) ? <button onClick={openPhrase}><Layers size={16} /><span>存为短语</span></button> : <button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button>}</div>}
+    {selection && <div className="selection-popover glass-panel" style={{ left: selection.x, top: selection.y }} onMouseDown={(event) => event.preventDefault()}><button onClick={() => { setLookup({ word: normalizeWord(selection.text), context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookMarked size={16} /><span>查词</span></button><button onClick={() => saveHighlight(false)}><Highlighter size={16} /><span>标记</span></button><button onClick={() => setNoteOpen(true)}><NotebookPen size={16} /><span>笔记</span></button><button onClick={() => { setVoiceTarget(selection.text); setSelection(null); }}><Mic2 size={16} /><span>跟读对比</span></button><button onClick={() => { const firstWord = normalizeWord(selection.text.trim().split(/\s+/)[0]); const sentence = extractSentence(selection.context, firstWord); setLookup({ word: firstWord, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); void doTranslate(sentence); }}><Languages size={16} /><span>翻译</span></button>{isMultiWord(selection.text) ? <button onClick={openPhrase}><Layers size={16} /><span>存为短语</span></button> : <button onClick={() => { saveVocab({ word: selection.text, context: selection.context, paragraphIndex: selection.paragraphIndex }); setSelection(null); }}><BookmarkPlus size={16} /><span>收藏</span></button>}</div>}
     {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}>
       <section className="lookup-panel glass-panel" aria-label="查词面板">
         <div className="lookup-grabber" />
@@ -388,7 +404,12 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
             <Button variant={sentenceSaved ? 'secondary' : 'primary'} onClick={saveSentence} disabled={sentenceSaved}>{sentenceSaved ? <Check size={16} /> : <BookmarkPlus size={16} />}{sentenceSaved ? '已收藏句子' : '收藏句子'}</Button>
             <button className="icon-button" onClick={speakSentence} aria-label="朗读这句话" title="朗读这句话"><Volume2 size={17} /></button>
             <button className="icon-button" onClick={copySentence} aria-label="复制这句话" title="复制这句话"><Copy size={17} /></button>
+            <button className="translate-toggle" onClick={() => doTranslate(lookupSentence)} disabled={translating}><Languages size={15} />{translating ? '翻译中…' : '翻译整句'}</button>
           </div>
+          {translating && <p className="sentence-translation muted">正在翻译这句话…</p>}
+          {translation && translation.for === lookupSentence && (translation.text
+            ? <div className="sentence-translation"><span className="translation-label">机器翻译 · 仅供理解{translation.source === 'server' ? ' · 服务器' : ''}</span><p>{translation.text}</p></div>
+            : <p className="sentence-translation muted">暂无法翻译（离线或翻译服务不可达），不影响阅读与查词。</p>)}
         </div></div>
         {dictionary && (dictionary.usage || dictionary.example || dictionary.synonyms.length > 0) && <div className="dictionary-section"><span className="dictionary-number">03</span><div><h3>可以怎么用</h3>{dictionary.usage && <p>{dictionary.usage}</p>}{dictionary.example && <div className="example-box"><p>{dictionary.example}</p>{dictionary.exampleCn && <span>{dictionary.exampleCn}</span>}</div>}{dictionary.synonyms.length > 0 && <div className="synonyms">{dictionary.synonyms.map((word) => <span key={word}>{word}</span>)}</div>}</div></div>}
         <div className="lookup-actions"><Button variant="secondary" onClick={() => setLookup(null)}>返回原文</Button><Button disabled={isSaved} onClick={() => saveVocab(lookup)}>{isSaved ? <Check size={17} /> : <Plus size={17} />}{isSaved ? '已在词汇本' : '收藏单词'}</Button></div>

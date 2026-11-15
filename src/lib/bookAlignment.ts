@@ -144,14 +144,14 @@ export function alignSegmentsToLines(lines: string[], chunks: TimedChunk[]): Ali
   });
 }
 
-export async function buildBookAlignment(book: Book, blob: Blob, options: BuildAlignmentOptions = {}): Promise<BookAlignment> {
+export interface TimedTranscription { chunks: TimedChunk[]; duration: number }
+
+/** 解码音频 → 按 60s 窗本地 Whisper 带时间戳转写。供「对齐已有文本」与「音频一键建课」共用。 */
+export async function transcribeAudioTimed(blob: Blob, options: BuildAlignmentOptions = {}): Promise<TimedTranscription> {
   const { onProgress, isCancelled } = options;
   if (blob.size > MAX_ALIGN_BYTES) {
-    throw new Error(`音频 ${(blob.size / 1048576).toFixed(1)}MB 超过 ${MAX_ALIGN_BYTES / 1048576}MB 上限。请剪出要练的章节再试（对齐整本有声书在浏览器里不现实）。`);
+    throw new Error(`音频 ${(blob.size / 1048576).toFixed(1)}MB 超过 ${MAX_ALIGN_BYTES / 1048576}MB 上限。请剪出要练的章节再试（在浏览器里转写整本有声书不现实）。`);
   }
-  const lines = collectBookLines(book);
-  if (lines.length < 3) throw new Error('这本书没有足够的正文文本可供对齐（扫描图片版 EPUB 暂不支持）。');
-
   onProgress?.({ phase: 'decode', progress: 0, label: '解码音频到 16kHz…' });
   const pcm = await decodeBookAudioToMono16k(blob);
   if (!pcm.length) throw new Error('音频解码为空，换一个 mp3 / m4a / wav 文件试试。');
@@ -179,7 +179,16 @@ export async function buildBookAlignment(book: Book, blob: Blob, options: BuildA
       label: `本地转写 ${i + 1}/${total} 段`,
     });
   }
+  if (isCancelled?.()) throw new AlignmentCancelled();
+  return { chunks, duration };
+}
 
+export async function buildBookAlignment(book: Book, blob: Blob, options: BuildAlignmentOptions = {}): Promise<BookAlignment> {
+  const { onProgress, isCancelled } = options;
+  const lines = collectBookLines(book);
+  if (lines.length < 3) throw new Error('这本书没有足够的正文文本可供对齐（扫描图片版 EPUB 暂不支持）。');
+
+  const { chunks, duration } = await transcribeAudioTimed(blob, options);
   if (isCancelled?.()) throw new AlignmentCancelled();
   onProgress?.({ phase: 'align', progress: 0, label: `对齐 ${lines.length} 行文本…` });
   const aligned = alignSegmentsToLines(lines, chunks);

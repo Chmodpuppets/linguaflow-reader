@@ -344,6 +344,12 @@ export default function App() {
     } catch (error) { notify(error instanceof Error ? error.message : '文本导入失败，请检查内容。', 'error'); throw error; }
     finally { setImporting(false); }
   };
+  // 音频一键建课：LessonBuilder 已把音频与句级对齐落盘，这里只把书放进书架并打开。
+  const lessonCreated = (book: Book) => {
+    setData((current) => ({ ...current, books: [book, ...current.books] }));
+    setActiveBookId(book.id);
+    notify(`已建课《${book.title}》，边听边看、逐句跟读已就绪`);
+  };
   const importBook = async (file: File) => {
     const isText = /\.(txt|md|markdown)$/i.test(file.name) || file.type === 'text/plain' || file.type === 'text/markdown';
     if (isText) { await importText(file.name.replace(/\.(txt|md|markdown)$/i, ''), await file.text()); return; }
@@ -380,7 +386,7 @@ export default function App() {
 
   let content: React.ReactNode;
   if (activeBook) content = <Reader book={activeBook} settings={data.settings} highlights={data.highlights} savedWords={savedWords} sentences={data.sentences || []} wordStates={data.wordStates || {}} glosses={data.glosses || {}} onBack={() => setActiveBookId(null)} onUpdateBook={updateBook} onSettings={updateSettings} onAddVocab={addVocab} onAddHighlight={addHighlight} onAddSentence={addSentence} onSetWordState={setWordState} onSaveVoice={saveVoiceRecord} onNotify={notify} />;
-  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} views={data.libraryViews || []} onSaveView={saveLibraryView} onDeleteView={deleteLibraryView} onSetTags={setBookTags} />;
+  else if (page === 'library') content = <Library books={data.books} knownWords={knownWords} onOpen={openBook} onImport={importBook} onImportText={importText} onLessonCreated={lessonCreated} onDelete={deleteBook} importing={importing} importProgress={importProgress} stats={{ ...wordStateCounts(data), streak: computeStreak(data), today: todayActions(data), goal: data.settings.dailyGoal ?? 5 }} onGoal={(goal) => updateSettings({ dailyGoal: goal })} views={data.libraryViews || []} onSaveView={saveLibraryView} onDeleteView={deleteLibraryView} onSetTags={setBookTags} />;
   else if (page === 'vocabulary') content = <Vocabulary entries={data.vocabulary} sentences={data.sentences || []} onOpenSource={openSource} onReview={() => setPage('review')} onDelete={deleteVocab} onBulkDelete={deleteVocabMany} onImportKnown={importKnownWords} />;
   else if (page === 'review') content = <Review entries={data.vocabulary} sentences={data.sentences || []} onReview={addReview} onReviewSentence={reviewSentence} onBack={() => setPage('library')} />;
   else if (page === 'voice-lab') content = <VoiceLab books={data.books} highlights={data.highlights} vocabulary={data.vocabulary} voiceRecords={data.voiceRecords} onSave={saveVoiceRecord} onActivateWord={activateSpokenWord} onOpenAnalytics={() => setPage('voice-analytics')} />;

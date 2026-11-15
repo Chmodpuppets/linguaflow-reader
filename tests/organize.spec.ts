@@ -5,7 +5,9 @@ test('书籍标签 + 按标签筛选 + 保存视图', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.goto('/');
-  await page.locator('.book-card').first().waitFor();
+  // 公版经典是第二阶段懒加载 chunk：等一本经典（汤姆·索亚，仅存在于经典）出现，
+  // 确保内置书架全部到位再计数，避免后到的经典让 total 偏小（竞态）。
+  await page.locator('.book-card', { hasText: 'Tom Sawyer' }).first().waitFor();
   const total = await page.locator('.book-card').count();
 
   // 给第一本书打标签

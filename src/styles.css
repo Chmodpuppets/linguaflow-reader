@@ -994,3 +994,38 @@ button.hero-book { cursor: pointer; font: inherit; }
 .phrase-meaning-label { font-size: 12.5px; color: var(--muted,#94a3b8); line-height: 1.6; }
 .phrase-meaning { width: 100%; }
 .vocab-word .phrase-badge { margin-left: 2px; }
+
+/* 整句机器翻译 */
+.translate-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(14,165,233,.4); background: rgba(14,165,233,.12); color: var(--text,#e2e8f0); font-size: 12px; cursor: pointer; transition: background .15s ease; white-space: nowrap; }
+.translate-toggle:hover:not(:disabled) { background: rgba(14,165,233,.24); }
+.translate-toggle:disabled { opacity: .6; cursor: default; }
+.sentence-translation { margin-top: 12px; padding: 12px 15px; border-left: 3px solid rgba(14,165,233,.55); border-radius: 0 10px 10px 0; background: rgba(14,165,233,.07); }
+.sentence-translation p { margin: 0; color: var(--text,#e2e8f0); font-size: 14px; line-height: 1.75; }
+.sentence-translation.muted { color: var(--muted,#94a3b8); font-size: 12.5px; border-left-color: rgba(148,163,184,.35); background: rgba(148,163,184,.06); }
+.translation-label { display: block; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: rgba(14,165,233,.85); margin-bottom: 6px; }
+@media (max-width: 640px) { .translate-toggle { margin-left: 0; } }
+
+/* 音频一键建课 */
+.lesson-builder { display: flex; flex-direction: column; gap: 14px; }
+.lesson-intro { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: rgba(14,165,233,.08); border: 1px solid rgba(14,165,233,.2); }
+.lesson-intro svg { color: #38bdf8; flex: none; margin-top: 2px; }
+.lesson-intro p { margin: 0; font-size: 12.5px; line-height: 1.65; color: var(--text,#cbd5e1); }
+.lesson-audio { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1.5px dashed rgba(148,163,184,.4); border-radius: 14px; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.lesson-audio:hover { border-color: rgba(14,165,233,.6); background: rgba(14,165,233,.05); }
+.lesson-audio.has-audio { border-style: solid; border-color: rgba(14,165,233,.45); background: rgba(14,165,233,.07); }
+.lesson-audio > svg { color: #38bdf8; flex: none; }
+.lesson-audio-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.lesson-audio-meta strong { font-size: 13.5px; color: var(--text,#e2e8f0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lesson-audio-meta span { font-size: 11px; color: var(--muted,#94a3b8); }
+.lesson-builder .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.lesson-builder .field span { opacity: .75; }
+.lesson-builder select { width: 100%; }
+.lesson-progress { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: rgba(148,163,184,.07); }
+.lesson-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--text,#cbd5e1); }
+.lesson-progress-head span { display: inline-flex; align-items: center; gap: 7px; }
+.lesson-progress-pct { font-size: 11px; color: var(--muted,#94a3b8); align-self: flex-end; }
+.lesson-error { margin: 0; padding: 10px 13px; border-radius: 10px; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; font-size: 12.5px; line-height: 1.6; }
+.lesson-success { display: flex; align-items: center; gap: 7px; margin: 0; padding: 10px 13px; border-radius: 10px; background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3); color: #6ee7b7; font-size: 12.5px; }
+.lesson-actions { display: flex; }
+.lesson-actions .button { flex: 1; justify-content: center; }
+.lesson-note { margin: 0; font-size: 11px; line-height: 1.6; color: var(--faint,#64748b); }
