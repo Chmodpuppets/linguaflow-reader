@@ -7,6 +7,7 @@ import { initialData } from './data/initialData';
 import { gradedGlosses } from './data/gradedReaders';
 import { loadBuiltinBooks } from './data/builtinBooks';
 import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, subscribeExternalSave, type StorageChannel } from './lib/db';
+import { mergeRecentAdds } from './lib/dataMerge';
 import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
@@ -92,6 +93,11 @@ export default function App() {
   // 采纳的快照已由发送方落盘，本标签不再重复写盘/广播（否则会与其它标签互相回放）。
   const revRef = useRef(0);
   const adoptingRef = useRef(false);
+  // dataRef 始终指向最新 data，供跨标签页采纳回调读取本地快照（闭包里的 data 会过期）。
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  // 记录各收藏类集合上一轮的长度：一旦有新增就立即落盘（不走防抖），把「刚收藏就被另一标签覆盖」的窗口压到最小。
+  const prevSizes = useRef<Record<string, number>>({});
   // 应用内确认弹窗（替代原生 confirm）：askConfirm 返回 Promise，ESC/遮罩/取消都 resolve(false)。
   const [confirmState, setConfirmState] = useState<{ title: string; message: string; confirmLabel?: string; danger?: boolean; resolve: (ok: boolean) => void } | null>(null);
   const activeBook = data.books.find((book) => book.id === activeBookId) || null;
@@ -174,6 +180,19 @@ export default function App() {
 
   useEffect(() => {
     if (!ready) return;
+    // 先比较各收藏类集合长度：有新增（收藏词/句/标记/导入书…）就立即落盘，不走防抖。
+    // 这样「刚收藏的词」几乎瞬间写盘并广播给其它标签页，把被旧快照覆盖的窗口压到最小。
+    const sizes: Record<string, number> = {
+      vocabulary: data.vocabulary.length,
+      highlights: data.highlights.length,
+      sentences: (data.sentences || []).length,
+      books: data.books.length,
+      reviewLogs: data.reviewLogs.length,
+      voiceRecords: data.voiceRecords.length,
+      libraryViews: (data.libraryViews || []).length,
+    };
+    const grew = Object.keys(sizes).some((key) => sizes[key] > (prevSizes.current[key] ?? 0));
+    prevSizes.current = sizes;
     // 这次变更来自其它标签页的采纳：快照已由发送方落盘，本标签不再重复写/广播，避免互相回放。
     // 同时取消本标签可能仍在排队的旧写盘定时器，免得它稍后把更旧的快照覆盖回去。
     if (adoptingRef.current) {
@@ -181,7 +200,7 @@ export default function App() {
       if (saveTimer.current) { window.clearTimeout(saveTimer.current); saveTimer.current = null; }
       return;
     }
-    // 只存瘦身后的书 + 防抖，翻页/标记不再整本书序列化；rev 单调递增，供其它标签页判断新旧。
+    // 只存瘦身后的书；rev 单调递增，供其它标签页判断新旧。设置/滑杆等高频改动仍防抖批量写。
     const rev = revRef.current + 1;
     revRef.current = rev;
     const snapshot = { ...data, rev, books: slimForStorage(data.books) };
@@ -193,7 +212,8 @@ export default function App() {
       notify('本地数据保存失败，请检查浏览器存储空间或配额', 'error');
     }); };
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(persist, 400);
+    if (grew) { saveTimer.current = null; persist(); }
+    else saveTimer.current = window.setTimeout(persist, 400);
     const flush = () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); persist(); };
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
@@ -206,18 +226,32 @@ export default function App() {
     const adopt = (incoming: AppData) => {
       const incomingRev = incoming.rev || 0;
       if (incomingRev <= revRef.current) return;
-      revRef.current = incomingRev;
+      // 采纳前先把「本地最近几秒刚加、对方快照还没有」的收藏并回去，避免刚收藏的词被整份覆盖抹掉。
+      const { data: merged, preserved } = mergeRecentAdds(dataRef.current, incoming);
+      const hydrated: AppData = {
+        ...merged,
+        books: hydrateBooks(merged.books || []),
+        vocabulary: (merged.vocabulary || []).map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
+        voiceRecords: merged.voiceRecords || [],
+        sentences: merged.sentences || [],
+        wordStates: merged.wordStates || {},
+        glosses: { ...gradedGlosses, ...(merged.glosses || {}) },
+        libraryViews: merged.libraryViews || [],
+      };
       adoptingRef.current = true;
-      setData({
-        ...incoming,
-        books: hydrateBooks(incoming.books || []),
-        vocabulary: (incoming.vocabulary || []).map((entry) => ({ ...entry, spokenCount: entry.spokenCount || 0 })),
-        voiceRecords: incoming.voiceRecords || [],
-        sentences: incoming.sentences || [],
-        wordStates: incoming.wordStates || {},
-        glosses: { ...gradedGlosses, ...(incoming.glosses || {}) },
-        libraryViews: incoming.libraryViews || [],
-      });
+      setData(hydrated);
+      if (preserved > 0) {
+        // 并回了本地新增：立即把合并结果落盘并广播（rev 抬高一格），确保这些记录真正持久化、对方也能拿到。
+        const rev = incomingRev + 1;
+        revRef.current = rev;
+        const snapshot = { ...hydrated, rev, books: slimForStorage(hydrated.books) };
+        void saveData(snapshot).then(() => setStorageChannel(getStorageChannel())).catch(() => {
+          setStorageChannel(getStorageChannel());
+          notify('本地数据保存失败，请检查浏览器存储空间或配额', 'error');
+        });
+      } else {
+        revRef.current = incomingRev;
+      }
     };
     return subscribeExternalSave(adopt, () => { void loadData().then((fresh) => { if (fresh) adopt(fresh); }); });
   }, [ready]);

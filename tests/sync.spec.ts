@@ -41,3 +41,26 @@ test('另一标签页的写盘不会抹掉本标签刚收藏的词', async ({ pa
   expect(errors).toEqual([]);
   await other.close();
 });
+
+test('A 刚收藏、B 紧接着写盘（防抖窗内竞态），A 的词仍不丢', async ({ page, context }) => {
+  const other = await context.newPage();
+  await page.goto('/');
+  await other.goto('/');
+  await page.getByRole('button', { name: '导入书籍' }).waitFor();
+  await other.getByRole('button', { name: '导入书籍' }).waitFor();
+
+  await importText(page, 'Race A', 'She argued vehemently against the plan.');
+  await page.locator('.chapter-body [data-word="vehemently"]').first().click();
+  await page.locator('.lookup-panel').waitFor();
+  await page.getByRole('button', { name: /收藏单词|已在词汇本/ }).click();
+  await expect(page.locator('.toast')).toContainText('已收藏 vehemently');
+  // 不等待：B 立刻导入第二本书触发整份写盘，模拟「对方快照还没收到 A 的广播」的竞态。
+  await importText(other, 'Race B', 'His embarrassment was obvious to everyone.');
+  await other.waitForTimeout(700);
+  await page.waitForTimeout(700);
+
+  await page.reload();
+  await page.getByRole('button', { name: /词汇笔记本/ }).click();
+  await expect(page.locator('.vocab-row .vocab-word strong', { hasText: 'vehemently' })).toHaveCount(1);
+  await other.close();
+});
