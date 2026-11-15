@@ -149,8 +149,10 @@ h1,h2,h3,h4,p { margin-top: 0; }
 .book-cover:after { top: 35px; left: 10px; right: 10px; }
 .book-cover > span { font-size: 5px; }
 .book-cover strong { display: block; margin-top: 46px; font-family: 'Literata Variable',Georgia,serif; font-size: 18px; line-height: 1.08; }
-.book-cover small { left: 13px; bottom: 14px; font-size: 7px; max-width: 95px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.book-cover i { width: 45px; height: 45px; bottom: 40px; }
+/* 作者行（<i>）：绝对定位在封面底部，单行省略，避免长作者名溢出到右侧信息区 */
+.book-cover i { position: absolute; left: 13px; bottom: 14px; right: 13px; width: auto; height: auto; border: 0; border-radius: 0; box-shadow: none; font-style: normal; font-size: 7px; line-height: 1.3; opacity: .72; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 小书卡不再渲染装饰圆环（原 <i> 用途），避免与作者文字重叠 */
+.book-cover .cover-ring { display: none; }
 /* 真实封面（从 EPUB 提取）：整幅铺满、悬停微放大，保留书脊高光与底部渐隐以维持质感。 */
 .book-cover-img { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
 .book-card:hover .book-cover-img, .hero-book:hover .book-cover-img { transform: scale(1.05); }
