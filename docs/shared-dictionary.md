@@ -12,7 +12,8 @@
 | `GET {base}/dict/stats` | 各语就绪状态 / 词数 / 字节数 |
 
 - **base（canonical）**：`https://linguaflow.pathmora.cn/api`（同源反代到 `127.0.0.1:8787`）。未来统一域名（如 `https://api.pathmora.cn`）只需改 base，客户端契约不变。
-- **CORS**：`/dict/*` 对**所有 Origin 开放**（`Access-Control-Allow-Origin: *`），其余接口仍收紧到 `CORS_ORIGIN`。见 `linguaflow` 仓 `server/src/index.ts`（commit `645b124a`）。查词无 cookie、无敏感数据，开放 Origin 不引入 CSRF 风险。这是三产品跨域共用的前提。**已部署到线上并验证**：跨域 `GET` 与 `OPTIONS` 预检均返回 `Access-Control-Allow-Origin: *`，且允许 `Authorization` 头（统一账号 Bearer 可跨域携带）。
+- **CORS**：reader 跨域所需的 `/dict/*`、`/learn/*`、`/auth/*`（及 `/tts/edge`）对**所有 Origin 开放**（`Access-Control-Allow-Origin: *`），其余接口仍收紧到 `CORS_ORIGIN`。见 `linguaflow` 仓 `server/src/index.ts`。这些端点均无 cookie、用匿名 Bearer，开放 Origin 不引入 CSRF 风险，是三产品跨域共用（查词 + 学习上报 + 账号连接）的前提。**已部署到线上并验证**：跨域 `GET`/`POST` 与 `OPTIONS` 预检均返回 `Access-Control-Allow-Origin: *`，且允许 `Authorization` 头。
+  - **回归警示**：2026-11-13 一次 linguaflow 重部署曾覆盖该 CORS 补丁（只剩 `/tts/edge` 开放），导致 reader 查词/同步全部被 CORS 拦截、「释义出不来」。2026-11-15 已重新应用并扩大开放前缀。**任何 linguaflow API 重部署都必须保留上述开放前缀**，部署后用跨域 `OPTIONS` 预检校验 `Access-Control-Allow-Origin: *`。
 - **鉴权**：`/dict/*` 公开只读、**无需登录**；按 IP 限流（默认 1200 次/小时）。客户端可带 `Authorization: Bearer <token>`（统一账号预留），服务端当前忽略。
 - **缓存**：命中 `Cache-Control: public, max-age=604800`，未命中 `max-age=86400`。
 
