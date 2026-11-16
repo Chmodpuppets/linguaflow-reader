@@ -47,20 +47,24 @@ interface RawAtlasEntry {
 // 媒体位标记（与源站 index.json 一致）：1 插画 / 2 英音 / 4 美音 / 8 例句朗读 / 16 第二例句朗读。
 export const MEDIA_IMG = 1, MEDIA_UK = 2, MEDIA_US = 4, MEDIA_EX = 8, MEDIA_EX1 = 16;
 
-const DEFAULT_MEDIA_BASE = 'https://cdn.jsdelivr.net/gh/designfuchen/word-atlas@main/public/atlas';
+// 媒体（插画/录音）默认从自有阿里云 OSS 加载（bucket pathmora / oss-cn-beijing，对象 public-read），
+// 取代源站 jsdelivr CDN——国内更稳、完全自托管。文本数据仍优先同源本地镜像（离线可用），OSS 作兜底。
+const OSS_ATLAS_BASE = 'https://pathmora.oss-cn-beijing.aliyuncs.com/atlas/v1';
+const DEFAULT_MEDIA_BASE = OSS_ATLAS_BASE;
 const MEDIA_OVERRIDE_KEY = 'pathmora_atlas_media_base';
 let mediaBase = DEFAULT_MEDIA_BASE;
 try {
   const override = localStorage.getItem(MEDIA_OVERRIDE_KEY);
   if (override) mediaBase = override.replace(/\/+$/, '');
-} catch { /* 非浏览器 / 隐私模式：用默认 CDN */ }
+} catch { /* 非浏览器 / 隐私模式：用默认 OSS */ }
 
 export function setAtlasMediaBase(base: string): void { mediaBase = base.replace(/\/+$/, '') || DEFAULT_MEDIA_BASE; }
 export function getAtlasMediaBase(): string { return mediaBase; }
 
-// 文本数据 base（同源）。子路径部署时可覆盖。
+// 文本数据 base（同源本地镜像优先）。子路径部署时可覆盖；OSS 作为兜底来源。
 let textBase = '/';
 export function setAtlasTextBase(base: string): void { textBase = base.endsWith('/') ? base : `${base}/`; }
+const TEXT_FALLBACK_BASE = OSS_ATLAS_BASE;
 
 /** 归一化查询键：小写、折叠空白。 */
 export function normalizeAtlasKey(word: string): string {
@@ -108,7 +112,7 @@ export function mapAtlasEntry(raw: RawAtlasEntry, id: string, cefr: string, topi
   };
 }
 
-export interface AtlasMedia { img?: string; thumb?: string; uk?: string; us?: string; ex?: string; ex1?: string }
+export interface AtlasMedia { img?: string; thumb?: string; uk?: string; us?: string; ex?: string; ex2?: string }
 /** 按媒体位标记生成按需懒加载的媒体 URL（仅包含该词实际拥有的媒体）。 */
 export function atlasMediaUrls(id: string, media: number): AtlasMedia {
   const b = mediaBase;
@@ -117,7 +121,7 @@ export function atlasMediaUrls(id: string, media: number): AtlasMedia {
   if (media & MEDIA_UK) m.uk = `${b}/audio/uk/${id}.mp3`;
   if (media & MEDIA_US) m.us = `${b}/audio/us/${id}.mp3`;
   if (media & MEDIA_EX) m.ex = `${b}/audio/ex/${id}.mp3`;
-  if (media & MEDIA_EX1) m.ex1 = `${b}/audio/ex1/${id}.mp3`;
+  if (media & MEDIA_EX1) m.ex2 = `${b}/audio/ex2/${id}.mp3`;
   return m;
 }
 
@@ -139,11 +143,19 @@ async function fetchJson(url: string): Promise<unknown> {
   } catch { return null; } finally { clearTimeout(timer); }
 }
 
+/** 文本数据：同源本地镜像优先（离线可用、无 CORS），失败回退自有 OSS。path 如 'index.json' / 'entries/0.json'。 */
+async function fetchAtlasText(path: string): Promise<unknown> {
+  const local = await fetchJson(`${textBase}atlas/${path}`);
+  if (local) return local;
+  if (`${textBase}atlas/` !== `${TEXT_FALLBACK_BASE}/`) return fetchJson(`${TEXT_FALLBACK_BASE}/${path}`);
+  return null;
+}
+
 /** 加载紧凑索引（一次，会话级缓存）。失败返回 null（词库增强不可用，回退在线词典）。 */
 export function loadAtlasIndex(): Promise<AtlasIndex | null> {
   if (indexData) return Promise.resolve(indexData);
   if (!indexPromise) {
-    indexPromise = fetchJson(`${textBase}atlas/index.json`).then((data) => {
+    indexPromise = fetchAtlasText('index.json').then((data) => {
       const idx = data as AtlasIndex | null;
       if (!idx || !Array.isArray(idx.words)) { indexPromise = null; return null; }
       indexData = idx;
@@ -177,7 +189,7 @@ export function atlasGloss(word: string): WordGloss | null {
 
 function loadBlock(n: number): Promise<RawAtlasEntry[] | null> {
   if (!blockCache.has(n)) {
-    blockCache.set(n, fetchJson(`${textBase}atlas/entries/${n}.json`).then((d) => (Array.isArray(d) ? d as RawAtlasEntry[] : null)));
+    blockCache.set(n, fetchAtlasText(`entries/${n}.json`).then((d) => (Array.isArray(d) ? d as RawAtlasEntry[] : null)));
   }
   return blockCache.get(n)!;
 }

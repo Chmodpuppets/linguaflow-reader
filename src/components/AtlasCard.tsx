@@ -72,7 +72,7 @@ export default function AtlasCard({ data, queryWord }: { data: AtlasWord; queryW
         <div className="atlas-examples">
           {data.ex.slice(0, 2).map((e, i) => (
             <div className="atlas-example" key={i}>
-              <button type="button" className="atlas-example-play" onClick={() => play(i === 0 ? media.ex : media.ex1, e.en)} title="朗读例句"><Volume2 size={12} aria-hidden="true" /></button>
+              <button type="button" className="atlas-example-play" onClick={() => play(i === 0 ? media.ex : media.ex2, e.en)} title="朗读例句"><Volume2 size={12} aria-hidden="true" /></button>
               <div className="atlas-example-text"><p className="atlas-example-en">{e.en}</p><p className="atlas-example-zh">{e.zh}</p></div>
             </div>
           ))}

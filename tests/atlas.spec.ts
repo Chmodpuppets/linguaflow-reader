@@ -33,9 +33,9 @@ const ATLAS_BLOCK0 = [
 async function mockAtlas(page: import('@playwright/test').Page) {
   await page.route('**/atlas/index.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(ATLAS_INDEX) }));
   await page.route('**/atlas/entries/0.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(ATLAS_BLOCK0) }));
-  // 插画/缩略图走源站 CDN：mock 成同源小图，避免外网失败导致降级。
-  await page.route('**/atlas/thumb/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
-  await page.route('**/atlas/img/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
+  // 插画/缩略图默认走自有 OSS（atlas/v1/）：mock 成小图，避免外网失败导致降级。
+  await page.route('**/atlas/v1/thumb/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
+  await page.route('**/atlas/v1/img/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
 }
 
 async function importBook(page: import('@playwright/test').Page) {

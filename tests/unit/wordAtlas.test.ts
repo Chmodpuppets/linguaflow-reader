@@ -43,11 +43,11 @@ test('mapAtlasEntry：灌入 DictionaryEntry + 保留富字段', () => {
 test('atlasMediaUrls：按媒体位标记生成 URL', () => {
   const m15 = atlasMediaUrls('x', MEDIA_IMG | MEDIA_UK | MEDIA_US | MEDIA_EX);
   assert.ok(m15.img && m15.thumb && m15.uk && m15.us && m15.ex);
-  assert.equal(m15.ex1, undefined);
+  assert.equal(m15.ex2, undefined);
   const m31 = atlasMediaUrls('x', 31);
-  assert.ok(m31.ex1);
+  assert.ok(m31.ex2 && m31.ex2.includes('/audio/ex2/x.mp3'));
   assert.deepEqual(atlasMediaUrls('x', 0), {});
-  assert.ok(atlasMediaUrls('x', MEDIA_EX1).ex1);
+  assert.ok(atlasMediaUrls('x', MEDIA_EX1).ex2);
 });
 
 // ── 加载器（mock fetch）──────────────────────────────────────────────────────
