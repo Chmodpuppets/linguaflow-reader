@@ -47,3 +47,28 @@ test('chapterStats：覆盖率与裸页率随状态变化', () => {
   // learning 模式下只有 advice 注音 → 裸页 2/3
   assert.equal(stats.barePct, 67);
 });
+
+test('rubyGlossFor：释义缓存未命中时回退 fallback（Word Atlas 离线词库），门控不变', () => {
+  const states: Record<string, WordState> = { curious: 'learning', cat: 'known', dog: 'learning' };
+  const fallback = (w: string): WordGloss | null => (w === 'curious' ? { zh: '好奇的' } : w === 'cat' ? { zh: '猫' } : null);
+  // learning 词无缓存 → 用 fallback 注音
+  assert.equal(rubyGlossFor('curious', 'learning', states, glosses, fallback), '好奇的');
+  // known 词在 learning 模式仍不注（门控优先于 fallback）
+  assert.equal(rubyGlossFor('cat', 'learning', states, glosses, fallback), null);
+  // all 模式下 known 词用 fallback 注音
+  assert.equal(rubyGlossFor('cat', 'all', states, glosses, fallback), '猫');
+  // 缓存优先于 fallback
+  assert.equal(rubyGlossFor('vulnerable', 'learning', { vulnerable: 'learning' }, glosses, () => ({ zh: '别的' })), '易受影响的');
+  // off 模式即使有 fallback 也不注
+  assert.equal(rubyGlossFor('curious', 'off', states, glosses, fallback), null);
+});
+
+test('chapterStats：fallback 透传后裸页率下降', () => {
+  const paragraphs = ['curious cat'];
+  const states: Record<string, WordState> = { curious: 'learning', cat: 'learning' };
+  const fallback = (w: string): WordGloss | null => (w === 'curious' ? { zh: '好奇的' } : null);
+  const noFb = chapterStats(paragraphs, states, glosses, 'learning');
+  const withFb = chapterStats(paragraphs, states, glosses, 'learning', fallback);
+  assert.equal(noFb.barePct, 100); // 无缓存全裸
+  assert.equal(withFb.barePct, 50); // curious 经 fallback 注音
+});

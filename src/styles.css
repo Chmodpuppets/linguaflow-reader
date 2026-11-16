@@ -306,6 +306,38 @@ button.hero-book { cursor: pointer; font: inherit; }
 .synonyms { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .synonyms span { border: 1px solid var(--line); color: var(--muted); font-size: 9px; padding: 4px 8px; border-radius: 7px; }
 .lookup-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
+/* ── Word Atlas（词光）富词条增强卡：独立 .atlas-*，不改动基础查词面板 ── */
+.atlas-card { margin-top: 18px; padding: 15px 15px 12px; border: 1px solid rgba(139,92,246,.22); border-radius: 14px; background: linear-gradient(160deg, rgba(139,92,246,.07), rgba(255,255,255,.015)); }
+.atlas-head { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.atlas-cefr { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: #0f0f17; background: linear-gradient(120deg,#c4b5fd,#8b5cf6); padding: 3px 7px; border-radius: 6px; }
+.atlas-topic { font-size: 9px; color: var(--muted); border: 1px solid var(--line); padding: 3px 7px; border-radius: 6px; }
+.atlas-lemma { font-size: 9px; color: #c4b5fd; }
+.atlas-brand { margin-left: auto; font-size: 8px; letter-spacing: .12em; color: var(--faint); }
+.atlas-img { display: block; width: 100%; max-height: 190px; object-fit: contain; border-radius: 11px; background: rgba(255,255,255,.03); margin-bottom: 12px; }
+.atlas-img-fallback { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--faint); padding: 8px 0; margin-bottom: 8px; }
+.atlas-pron { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.atlas-pron-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--muted); border-radius: 9px; padding: 6px 10px; cursor: pointer; transition: border-color .15s, color .15s; }
+.atlas-pron-btn:hover { border-color: rgba(139,92,246,.5); color: var(--text); }
+.atlas-accent { font-size: 8px; font-weight: 700; letter-spacing: .06em; color: #c4b5fd; }
+.atlas-ipa { font-size: 11px; color: var(--text); }
+.atlas-examples { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+.atlas-example { display: flex; gap: 8px; align-items: flex-start; }
+.atlas-example-play { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 1px; border: 1px solid var(--line); border-radius: 7px; background: rgba(255,255,255,.03); color: var(--muted); cursor: pointer; }
+.atlas-example-play:hover { border-color: rgba(139,92,246,.5); color: #c4b5fd; }
+.atlas-example-text { min-width: 0; }
+.atlas-example-en { font-family: 'Literata Variable',Georgia,serif; font-size: 12px; line-height: 1.6; color: var(--text); margin-bottom: 3px; }
+.atlas-example-zh { font-size: 10px; line-height: 1.5; color: var(--faint); }
+.atlas-chips-row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 8px; }
+.atlas-chips-label { flex: none; font-size: 9px; color: var(--faint); width: 26px; }
+.atlas-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.atlas-chip { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px; }
+.atlas-chips.syn .atlas-chip { color: #a7f3d0; border-color: rgba(52,211,153,.28); }
+.atlas-chips.ant .atlas-chip { color: #fcd34d; border-color: rgba(251,191,36,.25); }
+.atlas-tip { display: flex; gap: 7px; align-items: flex-start; font-size: 11px; line-height: 1.6; color: #c4b5fd; background: rgba(139,92,246,.07); border-radius: 9px; padding: 9px 11px; margin: 4px 0 10px; }
+.atlas-tip svg { flex: none; margin-top: 2px; }
+.atlas-credit { font-size: 8px; color: var(--faint); text-align: right; }
+.atlas-credit a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted var(--line); }
+.atlas-credit a:hover { color: #c4b5fd; }
 .note-quote { font-family: 'Literata Variable',Georgia,serif; color: var(--muted); font-size: 13px; line-height: 1.7; border-left: 2px solid var(--primary); padding-left: 15px; margin-bottom: 20px; }
 .note-input { width: 100%; resize: vertical; background: rgba(7,7,14,.55); border: 1px solid var(--line-strong); border-radius: 12px; color: var(--text); padding: 14px; outline: 0; font-size: 12px; line-height: 1.7; }
 .note-input:focus { border-color: var(--primary); }

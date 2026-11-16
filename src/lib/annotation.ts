@@ -14,12 +14,13 @@ export function chapterWords(paragraphs: string[]): string[] {
   return [...seen];
 }
 
-/** 某个词在当前模式下是否应显示常驻注音，返回简短中文释义或 null。 */
-export function rubyGlossFor(word: string, mode: AnnotationMode, states: Record<string, WordState>, glosses: Record<string, WordGloss>): string | null {
+/** 某个词在当前模式下是否应显示常驻注音，返回简短中文释义或 null。
+ *  fallback：本地释义缓存未命中时的兜底来源（如 Word Atlas 离线词库），保持同一套显隐门控。 */
+export function rubyGlossFor(word: string, mode: AnnotationMode, states: Record<string, WordState>, glosses: Record<string, WordGloss>, fallback?: (word: string) => WordGloss | null): string | null {
   if (mode === 'off') return null;
   const key = word.toLowerCase();
   const state = states[key];
-  const gloss = glosses[key];
+  const gloss = glosses[key] || (fallback ? fallback(key) : null);
   if (!gloss || !gloss.zh) return null;
   if (state === 'known') return mode === 'all' ? gloss.zh : null;
   if (state === 'learning') return gloss.zh;
@@ -36,7 +37,7 @@ export interface ChapterStats {
 }
 
 /** 当前章的掌握 / 学习 / 覆盖率 / 裸页率，让「逐渐裸页」的进步可感知。 */
-export function chapterStats(paragraphs: string[], states: Record<string, WordState>, glosses: Record<string, WordGloss>, mode: AnnotationMode): ChapterStats {
+export function chapterStats(paragraphs: string[], states: Record<string, WordState>, glosses: Record<string, WordGloss>, mode: AnnotationMode, fallback?: (word: string) => WordGloss | null): ChapterStats {
   const words = chapterWords(paragraphs);
   let known = 0;
   let learning = 0;
@@ -45,7 +46,7 @@ export function chapterStats(paragraphs: string[], states: Record<string, WordSt
     const state = states[word];
     if (state === 'known') known++;
     else if (state === 'learning') learning++;
-    if (rubyGlossFor(word, mode, states, glosses)) annotated++;
+    if (rubyGlossFor(word, mode, states, glosses, fallback)) annotated++;
   }
   const total = words.length || 1;
   return {

@@ -22,6 +22,9 @@ public/wasm/
 # 由 scripts/copy-pdf-assets.mjs 在 dev/build 前生成（pdf.js 标准字体 + CMap）
 public/pdfjs/
 
+# 由 scripts/fetch-word-atlas.mjs 在 dev/build 前镜像（Word Atlas CC BY 4.0 词库文本，约 7MB）
+public/atlas/
+
 # 自托管 Whisper 模型（可选，见 README「本地模型源」）
 public/models/
 

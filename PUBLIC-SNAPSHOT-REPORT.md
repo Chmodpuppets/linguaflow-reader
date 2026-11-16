@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：170
-总大小：1.81 MB
+文件数：175
+总大小：1.85 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -46,11 +46,13 @@
 - `scripts/copy-ort-assets.mjs`
 - `scripts/copy-pdf-assets.mjs`
 - `scripts/export-local-content.mjs`
+- `scripts/fetch-word-atlas.mjs`
 - `scripts/prepare-public.mjs`
 - `scripts/run-unit-tests.mjs`
 - `scripts/sync-public.mjs`
 - `src/App.tsx`
 - `src/components/AppShell.tsx`
+- `src/components/AtlasCard.tsx`
 - `src/components/AudioBar.tsx`
 - `src/components/AudioBinding.tsx`
 - `src/components/LessonBuilder.tsx`
@@ -115,6 +117,7 @@
 - `src/lib/voice.ts`
 - `src/lib/whisper.ts`
 - `src/lib/whisperTypes.ts`
+- `src/lib/wordAtlas.ts`
 - `src/main.tsx`
 - `src/styles.css`
 - `src/types.ts`
@@ -122,6 +125,7 @@
 - `src/voice.css`
 - `src/workers/whisper.worker.ts`
 - `tests/annotation.spec.ts`
+- `tests/atlas.spec.ts`
 - `tests/backup.spec.ts`
 - `tests/base.ts`
 - `tests/bookedit.spec.ts`
@@ -175,6 +179,7 @@
 - `tests/unit/spaced.test.ts`
 - `tests/unit/subtitle.test.ts`
 - `tests/unit/voice.test.ts`
+- `tests/unit/wordAtlas.test.ts`
 - `tests/vocab.spec.ts`
 - `tests/voice-targets.spec.ts`
 - `tsconfig.json`

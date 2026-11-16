@@ -4,6 +4,8 @@ import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, S
 import { chapterStats, rubyGlossFor, type AnnotationMode } from '../lib/annotation';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
+import { lookupAtlas, loadAtlasIndex, atlasGloss, atlasIndexReady, type AtlasWord } from '../lib/wordAtlas';
+import AtlasCard from './AtlasCard';
 import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
 import { cleanPhrase, isMultiWord, phraseKey } from '../lib/phrase';
@@ -97,6 +99,9 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   // 在线词典兜底结果（按词缓存于 remoteDictionary）；remote.word 用于防止旧词的释义串到新词上。
   const [remote, setRemote] = useState<{ word: string; entry: DictionaryEntry | null; source: 'server' | 'free' | null } | null>(null);
   const [remoteLoading, setRemoteLoading] = useState(false);
+  // Word Atlas（词光）CC BY 词库增强：富词条（插画/CEFR/英美发音/例句/搭配）+ 离线 ruby 兜底。
+  const [atlas, setAtlas] = useState<{ word: string; data: AtlasWord | null } | null>(null);
+  const [atlasReady, setAtlasReady] = useState(false);
   // 查词面板默认只展示含该词的那一句；可切换看整段。换词时重置回句子视图。
   const [showFullParagraph, setShowFullParagraph] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -134,8 +139,9 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   useEffect(() => { setImageMissing(false); }, [book.id, pageNumber]);
   const pageText = chapter?.paragraphs.join(' ') || '';
   const localDict = lookup ? lookupWord(lookup.word) : undefined;
-  // 本地词库优先（带中文讲解）；本地未收录时用在线词典兜底，让任意英文词都有真实释义。
-  const dictionary = localDict || (lookup && remote?.word === lookup.word ? remote.entry || undefined : undefined);
+  // 本地词库优先（带中文讲解）；本地未收录时用在线词典兜底；再未命中用 Word Atlas 离线词库。
+  const atlasData = lookup && atlas?.word === lookup.word ? atlas.data : null;
+  const dictionary = localDict || (lookup && remote?.word === lookup.word ? remote.entry || undefined : undefined) || (atlasData ? atlasData.entry : undefined);
   const isSaved = lookup ? savedWords.includes(normalizeWord(lookup.word)) : false;
   // 句子级上下文：只取含该词的那一句（整段会把释义挤出首屏，也不利于收藏）。
   const lookupSentence = lookup ? extractSentence(lookup.context, lookup.word) : '';
@@ -169,11 +175,26 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     });
     return () => { active = false; };
   }, [lookup]);
+  // Word Atlas 索引：进入阅读页加载一次（会话级缓存），就绪后点亮离线 ruby 兜底。
+  useEffect(() => {
+    let active = true;
+    void loadAtlasIndex().then((idx) => { if (active && idx) setAtlasReady(true); });
+    return () => { active = false; };
+  }, []);
+  // Word Atlas 富词条：独立于在线词典，无论本地是否收录都尝试增强；切换词即作废上一次。
+  useEffect(() => {
+    if (!lookup) { setAtlas(null); return; }
+    const word = lookup.word;
+    let active = true;
+    void lookupAtlas(word).then((data) => { if (active) setAtlas({ word, data }); });
+    return () => { active = false; };
+  }, [lookup]);
   const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter?.id), [highlights, book.id, chapter?.id]);
-  // 常驻注音：模式（off/learning/all）+ 词状态 + 释义缓存 → 每个词是否显示 ruby。
+  // 常驻注音：模式（off/learning/all）+ 词状态 + 释义缓存（未命中回退 Word Atlas 离线词库）→ 每个词是否显示 ruby。
   const annotationMode: AnnotationMode = settings.annotationMode || 'learning';
-  const rubyFor = (word: string) => rubyGlossFor(word, annotationMode, wordStates, glosses);
-  const stats = useMemo(() => chapterStats(chapter?.paragraphs || [], wordStates, glosses, annotationMode), [chapter, wordStates, glosses, annotationMode]);
+  const atlasFallback = (word: string) => (atlasIndexReady() ? atlasGloss(word) : null);
+  const rubyFor = (word: string) => rubyGlossFor(word, annotationMode, wordStates, glosses, atlasFallback);
+  const stats = useMemo(() => chapterStats(chapter?.paragraphs || [], wordStates, glosses, annotationMode, atlasFallback), [chapter, wordStates, glosses, annotationMode, atlasReady]);
   const lookupState = lookup ? wordStates[normalizeWord(lookup.word)] : undefined;
 
   useEffect(() => {
@@ -395,7 +416,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}>
       <section className="lookup-panel glass-panel" aria-label="查词面板">
         <div className="lookup-grabber" />
-        <div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : dictionary ? (remote?.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))} aria-label="朗读单词"><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)} aria-label="关闭查词面板"><X size={20} /></button></div>
+        <div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : (lookup && remote?.word === lookup.word && remote.entry) ? (remote.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : atlasData ? 'WORD ATLAS · 词光' : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))} aria-label="朗读单词"><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)} aria-label="关闭查词面板"><X size={20} /></button></div>
         <div className="dictionary-section lookup-definition"><span className="dictionary-number">01</span><div><h3>释义</h3>{dictionary ? <><p className="dictionary-meaning">{dictionary.meaning}</p>{dictionary.chinese && <p className="dictionary-cn">{dictionary.chinese}</p>}</> : remoteLoading ? <p className="dictionary-meaning muted">本地词库未收录，正在查询服务器词典…</p> : <p className="dictionary-meaning muted">本地与在线词典都暂未收录这个词（离线时仅用本地词库）。你仍可将它和原句一起收藏，之后补充讲解。</p>}</div></div>
         <div className="word-state-row" role="group" aria-label="词状态">
           <button className={`state-btn learning ${lookupState === 'learning' ? 'on' : ''}`} onClick={() => markState('learning')}>{lookupState === 'learning' ? <Check size={15} /> : <Plus size={15} />}学习中 · 显示注音</button>
@@ -417,6 +438,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
             : <p className="sentence-translation muted">暂无法翻译（离线或翻译服务不可达），不影响阅读与查词。</p>)}
         </div></div>
         {dictionary && (dictionary.usage || dictionary.example || dictionary.synonyms.length > 0) && <div className="dictionary-section"><span className="dictionary-number">03</span><div><h3>可以怎么用</h3>{dictionary.usage && <p>{dictionary.usage}</p>}{dictionary.example && <div className="example-box"><p>{dictionary.example}</p>{dictionary.exampleCn && <span>{dictionary.exampleCn}</span>}</div>}{dictionary.synonyms.length > 0 && <div className="synonyms">{dictionary.synonyms.map((word) => <span key={word}>{word}</span>)}</div>}</div></div>}
+        {atlasData && <AtlasCard data={atlasData} queryWord={lookup.word} />}
         <div className="lookup-actions"><Button variant="secondary" onClick={() => setLookup(null)}>返回原文</Button><Button disabled={isSaved} onClick={() => saveVocab(lookup)}>{isSaved ? <Check size={17} /> : <Plus size={17} />}{isSaved ? '已在词汇本' : '收藏单词'}</Button></div>
       </section>
     </div>}
