@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LinguaFlow 网页收藏</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { width: 280px; margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; background: #0f172a; color: #e2e8f0; }
+    .wrap { padding: 16px; }
+    h1 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+    .mark { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg,#2dd4bf,#0ea5e9); display: inline-block; }
+    p.sub { margin: 0 0 14px; color: #94a3b8; font-size: 12px; }
+    .count { display: flex; align-items: baseline; gap: 6px; padding: 12px; border-radius: 12px; background: #1e293b; margin-bottom: 12px; }
+    .count strong { font-size: 26px; color: #5eead4; }
+    .count span { color: #94a3b8; font-size: 12px; }
+    button { appearance: none; border: 0; cursor: pointer; width: 100%; border-radius: 10px; padding: 10px; font: 600 14px/1 inherit; margin-bottom: 8px; }
+    .primary { background: #14b8a6; color: #042f2e; }
+    .ghost { background: #334155; color: #e2e8f0; }
+    button:hover { filter: brightness(1.08); }
+    .hint { color: #64748b; font-size: 11px; margin: 6px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1><span class="mark"></span>LinguaFlow 网页收藏</h1>
+    <p class="sub">在任意网页划选词 / 短语 / 句子，点浮现的「收藏」即可。</p>
+    <div class="count"><strong id="count">0</strong><span>条待同步到阅读器</span></div>
+    <button class="primary" id="open">打开 LinguaFlow Reader</button>
+    <button class="ghost" id="clear">清空待收藏</button>
+    <p class="hint">打开阅读器后，待收藏会自动并入词汇本 / 句子收藏（只存本机，不上传）。</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

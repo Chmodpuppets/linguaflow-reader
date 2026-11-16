@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "LinguaFlow Reader 网页收藏",
+  "version": "1.0.0",
+  "description": "在任意网页划选单词 / 短语 / 句子，一键收藏到 LinguaFlow Reader 的词汇本与句子收藏。本地优先，不上传。",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LinguaFlow 网页收藏",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "exclude_matches": ["https://reader.pathmora.cn/*", "http://localhost:3012/*", "http://127.0.0.1:3012/*"],
+      "js": ["lib.js", "capture.js"],
+      "css": ["capture.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://reader.pathmora.cn/*", "http://localhost:3012/*", "http://127.0.0.1:3012/*"],
+      "js": ["lib.js", "bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

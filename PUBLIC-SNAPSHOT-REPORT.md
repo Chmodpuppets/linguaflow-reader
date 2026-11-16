@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：138
-总大小：1.66 MB
+文件数：154
+总大小：1.71 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -21,6 +21,18 @@
 - `docs/learning-sync.md`
 - `docs/shared-dictionary.md`
 - `docs/voice-lab-v2-proposal.md`
+- `extension/background.js`
+- `extension/bridge.js`
+- `extension/capture.css`
+- `extension/capture.js`
+- `extension/icons/icon128.png`
+- `extension/icons/icon16.png`
+- `extension/icons/icon32.png`
+- `extension/icons/icon48.png`
+- `extension/lib.js`
+- `extension/manifest.json`
+- `extension/popup.html`
+- `extension/popup.js`
 - `index.html`
 - `package-lock.json`
 - `package.json`
@@ -74,6 +86,7 @@
 - `src/lib/difficulty.ts`
 - `src/lib/epub.ts`
 - `src/lib/exportCards.ts`
+- `src/lib/extensionImport.ts`
 - `src/lib/focus.ts`
 - `src/lib/knownWords.ts`
 - `src/lib/learning.ts`
@@ -106,6 +119,7 @@
 - `tests/base.ts`
 - `tests/degrade.spec.ts`
 - `tests/epub.spec.ts`
+- `tests/extension.spec.ts`
 - `tests/lesson.spec.ts`
 - `tests/lingq.spec.ts`
 - `tests/mobile.spec.ts`
@@ -129,6 +143,8 @@
 - `tests/unit/dictation.test.ts`
 - `tests/unit/difficulty.test.ts`
 - `tests/unit/exportCards.test.ts`
+- `tests/unit/extensionImport.test.ts`
+- `tests/unit/extensionLib.test.ts`
 - `tests/unit/focus.test.ts`
 - `tests/unit/graded.test.ts`
 - `tests/unit/knownWords.test.ts`

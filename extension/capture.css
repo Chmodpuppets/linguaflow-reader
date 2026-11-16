@@ -1,0 +1,11 @@
+/* 采集药丸的样式都在 capture.js 的 Shadow DOM 内联，避免污染宿主页面。
+   这里只保证挂载点不占布局、不被宿主隐藏。 */
+#linguaflow-capture-host {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: visible !important;
+  z-index: 2147483647 !important;
+}

@@ -21,7 +21,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const dest = process.env.PUBLIC_SNAPSHOT_DIR || '/tmp/linguaflow-reader-public';
 
 /** 只复制这些目录 / 文件，其它一律不带。 */
-const TREES = ['src', 'scripts', 'docs', 'tests', '.github', 'public/licenses'];
+const TREES = ['src', 'scripts', 'docs', 'tests', '.github', 'public/licenses', 'extension'];
 const FILES = [
   '.gitignore', 'LICENSE', 'README.md', 'THIRD-PARTY-NOTICES.md',
   'index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.tests.json',
@@ -41,6 +41,8 @@ const FORBIDDEN = [
 /** 唯一允许出现的二进制资源（项目自有品牌图标）。 */
 const ALLOWED_BINARY = new Set([
   'public/linguaflow-icon.png', 'public/linguaflow-logo.png',
+  'extension/icons/icon16.png', 'extension/icons/icon32.png',
+  'extension/icons/icon48.png', 'extension/icons/icon128.png',
 ]);
 
 /** 书籍正文的特征串（说明书里提到书名不算，这里只匹配正文级内容）。 */

@@ -8,6 +8,7 @@ import { gradedGlosses } from './data/gradedReaders';
 import { loadBuiltinBooks } from './data/builtinBooks';
 import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, subscribeExternalSave, type StorageChannel } from './lib/db';
 import { mergeRecentAdds } from './lib/dataMerge';
+import { LF_EXT_SOURCE, mergeImportedItems, type ExtensionImportAck } from './lib/extensionImport';
 import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
 import type { ImportProgress } from './lib/epub';
@@ -263,6 +264,30 @@ export default function App() {
     // 带撤销的提示停留更久，给用户足够的反悔窗口。
     toastTimer.current = window.setTimeout(() => setToast(null), undo ? 6000 : 3200);
   };
+
+  // 浏览器扩展投递的网页收藏：同源 bridge content script 以 postMessage 送来词/短语/句子，
+  // 这里并入数据（走正常 rev 写盘 + 跨标签广播），再回执已采纳的 id 让扩展清队列。
+  useEffect(() => {
+    if (!ready) return;
+    const onMessage = (event: MessageEvent) => {
+      const payload = event.data;
+      if (!payload || payload.source !== LF_EXT_SOURCE || payload.type !== 'lf-import' || !Array.isArray(payload.items)) return;
+      const current = dataRef.current;
+      if (!current) return;
+      const { data: merged, added } = mergeImportedItems(current, payload.items);
+      if (added > 0) {
+        setData(merged);
+        notify(`已从网页收藏 ${added} 条到词汇本 / 句子`, 'success');
+      }
+      // 回执所有合法条目 id（含已存在的重复项），让扩展队列彻底清空，避免重复项滞留。
+      const ids = payload.items.map((item: { id?: unknown }) => item?.id).filter((id: unknown): id is string => typeof id === 'string');
+      const ack: ExtensionImportAck = { source: LF_EXT_SOURCE, type: 'lf-imported', ids };
+      window.postMessage(ack, window.location.origin);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [ready]);
+
   const askConfirm = (options: { title: string; message: string; confirmLabel?: string; danger?: boolean }) => new Promise<boolean>((resolve) => { setConfirmState({ ...options, resolve }); });
   const closeConfirm = (ok: boolean) => { confirmState?.resolve(ok); setConfirmState(null); };
   const updateBook = (id: string, update: Partial<Book>) => setData((current) => ({ ...current, books: current.books.map((book) => book.id === id ? { ...book, ...update } : book) }));
