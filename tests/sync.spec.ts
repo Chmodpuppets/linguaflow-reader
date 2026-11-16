@@ -64,3 +64,46 @@ test('A 刚收藏、B 紧接着写盘（防抖窗内竞态），A 的词仍不�
   await expect(page.locator('.vocab-row .vocab-word strong', { hasText: 'vehemently' })).toHaveCount(1);
   await other.close();
 });
+
+// 并集合并不能把「删除」也吞掉：A 删词要传播到 B（墓碑），A 撤销又要让词复活（刷新 createdAt）。
+test('跨标签页删除传播 + 撤销复活（墓碑机制）', async ({ page, context }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const other = await context.newPage();
+  await page.goto('/');
+  await other.goto('/');
+  await page.getByRole('button', { name: '导入书籍' }).waitFor();
+  await other.getByRole('button', { name: '导入书籍' }).waitFor();
+
+  // A 收藏 curious，B 采纳
+  await importText(page, 'Del A', 'The curious cat sat on the warm mat.');
+  await page.locator('.chapter-body [data-word="curious"]').first().click();
+  await page.locator('.lookup-panel').waitFor();
+  await page.getByRole('button', { name: /收藏单词|已在词汇本/ }).click();
+  await expect(page.locator('.toast')).toContainText('已收藏 curious');
+  await page.waitForTimeout(900);
+  await other.reload();
+  await other.getByRole('button', { name: /词汇笔记本/ }).click();
+  await expect(other.locator('.vocab-row .vocab-word strong', { hasText: 'curious' })).toHaveCount(1);
+
+  // A 删除 curious → 墓碑传播到 B
+  await page.getByRole('button', { name: /词汇笔记本/ }).click();
+  await page.locator('.vocab-row', { hasText: 'curious' }).first().click();
+  await page.getByRole('button', { name: /删除词条/ }).click();
+  await page.getByRole('button', { name: '删除', exact: true }).click();
+  await expect(page.locator('.vocab-row', { hasText: 'curious' })).toHaveCount(0);
+  await page.waitForTimeout(900);
+  await other.reload();
+  await other.getByRole('button', { name: /词汇笔记本/ }).click();
+  await expect(other.locator('.vocab-row .vocab-word strong', { hasText: 'curious' })).toHaveCount(0);
+
+  // A 撤销 → 词复活并传播回 B
+  await page.locator('.toast-undo').click();
+  await expect(page.locator('.vocab-row', { hasText: 'curious' })).toHaveCount(1);
+  await page.waitForTimeout(900);
+  await other.reload();
+  await other.getByRole('button', { name: /词汇笔记本/ }).click();
+  await expect(other.locator('.vocab-row .vocab-word strong', { hasText: 'curious' })).toHaveCount(1);
+  expect(errors).toEqual([]);
+  await other.close();
+});

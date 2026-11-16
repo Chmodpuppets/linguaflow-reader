@@ -75,5 +75,10 @@ export function validateBackup(parsed: unknown): AppData {
       if (!playlist || !str(playlist.id) || !str(playlist.name) || !str(playlist.createdAt) || !Array.isArray(playlist.bookIds) || (playlist.bookIds as unknown[]).some((id) => !str(id))) throw new Error(`第 ${index + 1} 个播放列表损坏`);
     });
   }
+  // 删除墓碑是后加字段：旧备份没有时跳过（恢复端回退 {}），有则校验为 id→数字 的映射。
+  if (raw.tombstones !== undefined) {
+    const tombstones = raw.tombstones as Record<string, unknown>;
+    if (!tombstones || typeof tombstones !== 'object' || Array.isArray(tombstones) || Object.values(tombstones).some((at) => typeof at !== 'number' || !Number.isFinite(at))) throw new Error('删除墓碑格式不正确');
+  }
   return parsed as AppData;
 }

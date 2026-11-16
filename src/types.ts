@@ -195,6 +195,8 @@ export interface AppData {
   playlists?: Playlist[];
   /** 单调递增的数据修订号：跨标签页同步用来判断哪份快照更新，避免旧标签页整份覆盖新数据。旧备份无此字段时回退 0。 */
   rev?: number;
+  /** 删除墓碑（记录 id → 删除时刻 ms）：跨标签页按 id 并集合并时，据此让删除能传播、又不误伤撤销复活。旧备份无此字段时回退 {}。 */
+  tombstones?: Record<string, number>;
   settings: ReaderSettings;
 }
 

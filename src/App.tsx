@@ -7,7 +7,7 @@ import { initialData } from './data/initialData';
 import { gradedGlosses } from './data/gradedReaders';
 import { loadBuiltinBooks } from './data/builtinBooks';
 import { deleteAlignment, deleteBookAudio, getStorageChannel, loadData, saveData, saveVoiceAudio, subscribeExternalSave, type StorageChannel } from './lib/db';
-import { mergeRecentAdds } from './lib/dataMerge';
+import { mergeSnapshots } from './lib/dataMerge';
 import { LF_EXT_SOURCE, mergeImportedItems, type ExtensionImportAck } from './lib/extensionImport';
 import { notifyBookAudioChanged } from './lib/bookAudio';
 import { clearAlignment } from './lib/audioAlign';
@@ -143,6 +143,7 @@ export default function App() {
             glosses: { ...gradedGlosses, ...(stored.glosses || {}) },
             libraryViews: stored.libraryViews || [],
             playlists: stored.playlists || [],
+            tombstones: stored.tombstones || {},
           };
           // 老数据里可能没有后来新增的内置书：按 id 补齐，不动用户的词汇/笔记/进度
           const missing = initialData.books.filter((book) => !migrated.books.some((existing) => existing.id === book.id));
@@ -230,8 +231,9 @@ export default function App() {
     const adopt = (incoming: AppData) => {
       const incomingRev = incoming.rev || 0;
       if (incomingRev <= revRef.current) return;
-      // 采纳前先把「本地最近几秒刚加、对方快照还没有」的收藏并回去，避免刚收藏的词被整份覆盖抹掉。
-      const { data: merged, preserved } = mergeRecentAdds(dataRef.current, incoming);
+      // 采纳前按 id 取并集：本标签有、对方快照没有的收藏记录一律保留（与创建时间无关），
+      // 从根本上杜绝「刚收藏的词被另一个标签页的旧快照覆盖」；删除靠墓碑传播、撤销靠刷新 createdAt 复活。
+      const { data: merged, preserved } = mergeSnapshots(dataRef.current, incoming);
       const hydrated: AppData = {
         ...merged,
         books: hydrateBooks(merged.books || []),
@@ -242,6 +244,7 @@ export default function App() {
         glosses: { ...gradedGlosses, ...(merged.glosses || {}) },
         libraryViews: merged.libraryViews || [],
         playlists: merged.playlists || [],
+        tombstones: merged.tombstones || {},
       };
       adoptingRef.current = true;
       setData(hydrated);
@@ -299,10 +302,14 @@ export default function App() {
   // 书库组织：标签 + 保存的视图。
   const setBookTags = (id: string, tags: string[]) => updateBook(id, { tags });
   const saveLibraryView = (view: Omit<LibraryView, 'id'>) => setData((current) => ({ ...current, libraryViews: [...(current.libraryViews || []), { ...view, id: makeId('view') }] }));
-  const deleteLibraryView = (id: string) => setData((current) => ({ ...current, libraryViews: (current.libraryViews || []).filter((view) => view.id !== id) }));
+  // 删除墓碑：跨标签页按 id 并集合并时，据此让删除传播到其它标签页（否则并集会把删掉的记录又加回来）。
+  const withDeleted = (current: AppData, ids: string[]): AppData => { const at = Date.now(); const tombstones = { ...(current.tombstones || {}) }; for (const id of ids) tombstones[id] = at; return { ...current, tombstones }; };
+  // 撤销删除：清掉墓碑并刷新 createdAt，让记录在并集合并里「复活」（创建时间晚于墓碑）。
+  const withRevived = (current: AppData, ids: string[]): AppData => { const tombstones = { ...(current.tombstones || {}) }; for (const id of ids) delete tombstones[id]; return { ...current, tombstones }; };
+  const deleteLibraryView = (id: string) => setData((current) => { const next = withDeleted(current, [id]); return { ...next, libraryViews: (next.libraryViews || []).filter((view) => view.id !== id) }; });
   // 课程播放列表：有序 bookId 队列，连续播放带音频的书/课程。
   const createPlaylist = (name: string) => { const id = makeId('playlist'); setData((current) => ({ ...current, playlists: [...(current.playlists || []), { id, name, bookIds: [], createdAt: new Date().toISOString() }] })); return id; };
-  const deletePlaylist = (id: string) => setData((current) => ({ ...current, playlists: (current.playlists || []).filter((p) => p.id !== id) }));
+  const deletePlaylist = (id: string) => setData((current) => { const next = withDeleted(current, [id]); return { ...next, playlists: (next.playlists || []).filter((p) => p.id !== id) }; });
   const renamePlaylist = (id: string, name: string) => setData((current) => ({ ...current, playlists: (current.playlists || []).map((p) => p.id === id ? { ...p, name } : p) }));
   const addToPlaylist = (playlistId: string, bookId: string) => setData((current) => ({ ...current, playlists: (current.playlists || []).map((p) => p.id === playlistId ? { ...p, bookIds: addBookToPlaylist(p.bookIds, bookId) } : p) }));
   const removeFromPlaylist = (playlistId: string, bookId: string) => setData((current) => ({ ...current, playlists: (current.playlists || []).map((p) => p.id === playlistId ? { ...p, bookIds: removeBookFromPlaylist(p.bookIds, bookId) } : p) }));
@@ -330,8 +337,8 @@ export default function App() {
     const ok = await askConfirm({ title: '删除收藏句子', message: '确定从句子收藏里移除这句话吗？', confirmLabel: '删除', danger: true });
     if (!ok) return;
     const removed = (data.sentences || []).find((item) => item.id === id);
-    setData((current) => ({ ...current, sentences: (current.sentences || []).filter((item) => item.id !== id) }));
-    if (removed) notify('已删除收藏句子', 'success', () => setData((current) => ({ ...current, sentences: [removed, ...(current.sentences || []).filter((item) => item.id !== id)] })));
+    setData((current) => { const next = withDeleted(current, [id]); return { ...next, sentences: (next.sentences || []).filter((item) => item.id !== id) }; });
+    if (removed) notify('已删除收藏句子', 'success', () => setData((current) => { const next = withRevived(current, [id]); return { ...next, sentences: [{ ...removed, createdAt: new Date().toISOString() }, ...(next.sentences || []).filter((item) => item.id !== id)] }; }));
   };
   // 词状态 + 常驻注音释义缓存：标记学习中/已掌握时写入，阅读页据此渲染 ruby 与覆盖率。
   const setWordState = (word: string, state: WordState, gloss?: WordGloss) => setData((current) => ({
@@ -344,8 +351,9 @@ export default function App() {
     if (!ok) return;
     const removed = data.vocabulary.find((entry) => entry.id === id);
     const removedLogs = data.reviewLogs.filter((log) => log.vocabId === id);
-    setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => entry.id !== id), reviewLogs: current.reviewLogs.filter((log) => log.vocabId !== id) }));
-    if (removed) notify('已删除词条', 'success', () => setData((current) => ({ ...current, vocabulary: [removed, ...current.vocabulary.filter((entry) => entry.id !== id)], reviewLogs: [...removedLogs, ...current.reviewLogs] })));
+    const deletedIds = [id, ...removedLogs.map((log) => log.id)];
+    setData((current) => { const next = withDeleted(current, deletedIds); return { ...next, vocabulary: next.vocabulary.filter((entry) => entry.id !== id), reviewLogs: next.reviewLogs.filter((log) => log.vocabId !== id) }; });
+    if (removed) notify('已删除词条', 'success', () => setData((current) => { const next = withRevived(current, deletedIds); const at = new Date().toISOString(); return { ...next, vocabulary: [{ ...removed, createdAt: at }, ...next.vocabulary.filter((entry) => entry.id !== id)], reviewLogs: [...removedLogs.map((log) => ({ ...log, createdAt: at })), ...next.reviewLogs] }; }));
   };
   const deleteVocabMany = async (ids: string[]) => {
     if (!ids.length) return;
@@ -354,8 +362,9 @@ export default function App() {
     const idSet = new Set(ids);
     const removed = data.vocabulary.filter((entry) => idSet.has(entry.id));
     const removedLogs = data.reviewLogs.filter((log) => idSet.has(log.vocabId));
-    setData((current) => ({ ...current, vocabulary: current.vocabulary.filter((entry) => !idSet.has(entry.id)), reviewLogs: current.reviewLogs.filter((log) => !idSet.has(log.vocabId)) }));
-    notify(`已删除 ${removed.length} 个词条`, 'success', () => setData((current) => ({ ...current, vocabulary: [...removed, ...current.vocabulary.filter((entry) => !idSet.has(entry.id))], reviewLogs: [...removedLogs, ...current.reviewLogs] })));
+    const deletedIds = [...ids, ...removedLogs.map((log) => log.id)];
+    setData((current) => { const next = withDeleted(current, deletedIds); return { ...next, vocabulary: next.vocabulary.filter((entry) => !idSet.has(entry.id)), reviewLogs: next.reviewLogs.filter((log) => !idSet.has(log.vocabId)) }; });
+    notify(`已删除 ${removed.length} 个词条`, 'success', () => setData((current) => { const next = withRevived(current, deletedIds); const at = new Date().toISOString(); return { ...next, vocabulary: [...removed.map((entry) => ({ ...entry, createdAt: at })), ...next.vocabulary.filter((entry) => !idSet.has(entry.id))], reviewLogs: [...removedLogs.map((log) => ({ ...log, createdAt: at })), ...next.reviewLogs] }; }));
   };
   const deleteBook = async (id: string) => {
     const book = data.books.find((item) => item.id === id);
@@ -365,14 +374,24 @@ export default function App() {
     if (!ok) return;
     setData((current) => {
       const removedVocabIds = new Set(current.vocabulary.filter((entry) => entry.bookId === id).map((entry) => entry.id));
+      // 级联删除的所有记录都立墓碑，避免其它标签页的并集合并把它们又加回来。
+      const deletedIds = [
+        id,
+        ...current.vocabulary.filter((entry) => entry.bookId === id).map((entry) => entry.id),
+        ...current.highlights.filter((item) => item.bookId === id).map((item) => item.id),
+        ...current.reviewLogs.filter((log) => removedVocabIds.has(log.vocabId)).map((log) => log.id),
+        ...current.voiceRecords.filter((record) => record.bookId === id).map((record) => record.id),
+        ...(current.sentences || []).filter((item) => item.bookId === id).map((item) => item.id),
+      ];
+      const next = withDeleted(current, deletedIds);
       return {
-        ...current,
-        books: current.books.filter((item) => item.id !== id),
-        vocabulary: current.vocabulary.filter((entry) => entry.bookId !== id),
-        highlights: current.highlights.filter((item) => item.bookId !== id),
-        reviewLogs: current.reviewLogs.filter((log) => !removedVocabIds.has(log.vocabId)),
-        voiceRecords: current.voiceRecords.filter((record) => record.bookId !== id),
-        sentences: (current.sentences || []).filter((item) => item.bookId !== id),
+        ...next,
+        books: next.books.filter((item) => item.id !== id),
+        vocabulary: next.vocabulary.filter((entry) => entry.bookId !== id),
+        highlights: next.highlights.filter((item) => item.bookId !== id),
+        reviewLogs: next.reviewLogs.filter((log) => !removedVocabIds.has(log.vocabId)),
+        voiceRecords: next.voiceRecords.filter((record) => record.bookId !== id),
+        sentences: (next.sentences || []).filter((item) => item.bookId !== id),
       };
     });
     // 级联清掉 IndexedDB 里为这本书绑定的音频与句级对齐，避免留下孤儿 Blob。
@@ -385,8 +404,8 @@ export default function App() {
   };
   const deleteHighlight = (id: string) => {
     const removed = data.highlights.find((item) => item.id === id);
-    setData((current) => ({ ...current, highlights: current.highlights.filter((item) => item.id !== id) }));
-    if (removed) notify('已删除标记', 'success', () => setData((current) => ({ ...current, highlights: [removed, ...current.highlights.filter((item) => item.id !== id)] })));
+    setData((current) => { const next = withDeleted(current, [id]); return { ...next, highlights: next.highlights.filter((item) => item.id !== id) }; });
+    if (removed) notify('已删除标记', 'success', () => setData((current) => { const next = withRevived(current, [id]); return { ...next, highlights: [{ ...removed, createdAt: new Date().toISOString() }, ...next.highlights.filter((item) => item.id !== id)] }; }));
   };
   // 返回落盘结果：VoiceRecorder 据此决定是否显示「已保存」，写失败不再谎报成功。
   const saveVoiceRecord = async (record: VoiceRecord, audio: Blob): Promise<boolean> => {
@@ -485,7 +504,7 @@ export default function App() {
   const restore = (restored: AppData) => {
     // 恢复备份是「以这份为准」的主动操作：把修订号抬到不低于备份自身，确保随后写盘能盖过其它标签页并被它们采纳。
     revRef.current = Math.max(revRef.current, restored.rev || 0);
-    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {}, libraryViews: restored.libraryViews || [], playlists: restored.playlists || [] });
+    setData({ ...restored, books: hydrateBooks(restored.books), reviewLogs: restored.reviewLogs || [], highlights: restored.highlights || [], voiceRecords: restored.voiceRecords || [], sentences: restored.sentences || [], wordStates: restored.wordStates || {}, glosses: restored.glosses || {}, libraryViews: restored.libraryViews || [], playlists: restored.playlists || [], tombstones: restored.tombstones || {} });
     setActiveBookId(null);
     setPage('library');
     notify('备份已恢复，欢迎回到你的阅读空间');

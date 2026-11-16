@@ -38,4 +38,5 @@ export const initialData: AppData = {
   wordStates: shelfOn ? { hare: 'learning', tortoise: 'learning', race: 'learning', steady: 'learning', finish: 'learning' } : {},
   glosses: { ...gradedGlosses },
   libraryViews: [],
+  tombstones: {},
 };
