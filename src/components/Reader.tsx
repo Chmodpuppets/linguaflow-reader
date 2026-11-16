@@ -176,19 +176,30 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     return () => { active = false; };
   }, [lookup]);
   // Word Atlas 索引：进入阅读页加载一次（会话级缓存），就绪后点亮离线 ruby 兜底。
+  // 首载可能因网络拥塞或 Service Worker 安装/接管（clients.claim）瞬时中断 fetch（ERR_ABORTED），
+  // 故带退避重试多次，确保索引最终就绪（否则首个查词会落空）；就绪后 atlasReady 触发当前词重解析。
   useEffect(() => {
     let active = true;
-    void loadAtlasIndex().then((idx) => { if (active && idx) setAtlasReady(true); });
-    return () => { active = false; };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tryLoad = (attempt: number) => {
+      void loadAtlasIndex().then((idx) => {
+        if (!active) return;
+        if (idx) setAtlasReady(true);
+        else if (attempt < 8) timer = setTimeout(() => tryLoad(attempt + 1), Math.min(600 * (attempt + 1), 3000));
+      });
+    };
+    tryLoad(0);
+    return () => { active = false; if (timer) clearTimeout(timer); };
   }, []);
   // Word Atlas 富词条：独立于在线词典，无论本地是否收录都尝试增强；切换词即作废上一次。
+  // 依赖 atlasReady：若查词发生在索引就绪之前，索引加载完成后自动重新解析当前词。
   useEffect(() => {
     if (!lookup) { setAtlas(null); return; }
     const word = lookup.word;
     let active = true;
     void lookupAtlas(word).then((data) => { if (active) setAtlas({ word, data }); });
     return () => { active = false; };
-  }, [lookup]);
+  }, [lookup, atlasReady]);
   const chapterMarks = useMemo(() => highlights.filter((mark) => mark.bookId === book.id && mark.chapterId === chapter?.id), [highlights, book.id, chapter?.id]);
   // 常驻注音：模式（off/learning/all）+ 词状态 + 释义缓存（未命中回退 Word Atlas 离线词库）→ 每个词是否显示 ruby。
   const annotationMode: AnnotationMode = settings.annotationMode || 'learning';

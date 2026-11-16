@@ -48,7 +48,7 @@ interface RawAtlasEntry {
 export const MEDIA_IMG = 1, MEDIA_UK = 2, MEDIA_US = 4, MEDIA_EX = 8, MEDIA_EX1 = 16;
 
 // 媒体（插画/录音）默认从自有阿里云 OSS 加载（bucket pathmora / oss-cn-beijing，对象 public-read），
-// 取代源站 jsdelivr CDN——国内更稳、完全自托管。文本数据仍优先同源本地镜像（离线可用），OSS 作兜底。
+// 取代源站 jsdelivr CDN——国内更稳、完全自托管。文本数据走同源本地镜像（离线可用、无 CORS）。
 const OSS_ATLAS_BASE = 'https://pathmora.oss-cn-beijing.aliyuncs.com/atlas/v1';
 const DEFAULT_MEDIA_BASE = OSS_ATLAS_BASE;
 const MEDIA_OVERRIDE_KEY = 'pathmora_atlas_media_base';
@@ -61,10 +61,9 @@ try {
 export function setAtlasMediaBase(base: string): void { mediaBase = base.replace(/\/+$/, '') || DEFAULT_MEDIA_BASE; }
 export function getAtlasMediaBase(): string { return mediaBase; }
 
-// 文本数据 base（同源本地镜像优先）。子路径部署时可覆盖；OSS 作为兜底来源。
+// 文本数据 base（同源本地镜像）。子路径部署时可覆盖。
 let textBase = '/';
 export function setAtlasTextBase(base: string): void { textBase = base.endsWith('/') ? base : `${base}/`; }
-const TEXT_FALLBACK_BASE = OSS_ATLAS_BASE;
 
 /** 归一化查询键：小写、折叠空白。 */
 export function normalizeAtlasKey(word: string): string {
@@ -143,12 +142,11 @@ async function fetchJson(url: string): Promise<unknown> {
   } catch { return null; } finally { clearTimeout(timer); }
 }
 
-/** 文本数据：同源本地镜像优先（离线可用、无 CORS），失败回退自有 OSS。path 如 'index.json' / 'entries/0.json'。 */
+/** 文本数据：同源本地镜像（随构建部署，离线可用、无 CORS）。path 如 'index.json' / 'entries/0.json'。
+ *  说明：OSS 上也存有同一份文本作备份/CDN 副本，但浏览器跨域 fetch 受 CORS 限制（该 AK 无 PutBucketCors 权限），
+ *  故应用文本一律走同源镜像；瞬时失败由调用方（Reader 索引重试）兜底，不做跨域回退以免控制台报错。 */
 async function fetchAtlasText(path: string): Promise<unknown> {
-  const local = await fetchJson(`${textBase}atlas/${path}`);
-  if (local) return local;
-  if (`${textBase}atlas/` !== `${TEXT_FALLBACK_BASE}/`) return fetchJson(`${TEXT_FALLBACK_BASE}/${path}`);
-  return null;
+  return fetchJson(`${textBase}atlas/${path}`);
 }
 
 /** 加载紧凑索引（一次，会话级缓存）。失败返回 null（词库增强不可用，回退在线词典）。 */

@@ -97,3 +97,28 @@ test('Word Atlas 兜底：在线词典都不可达时，词库直接作为释义
   await expect(panel.locator('.atlas-card .atlas-cefr')).toHaveText('B1');
   expect(pageErrors).toEqual([]);
 });
+
+test('Word Atlas 竞态：索引延迟就绪时，先点的词在索引加载后仍会补出富词条卡', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  // 索引故意延迟 1.5s（模拟首载网络拥塞）；词条/媒体正常。
+  await page.route('**/atlas/index.json', async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(ATLAS_INDEX) });
+  });
+  await page.route('**/atlas/entries/0.json', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(ATLAS_BLOCK0) }));
+  await page.route('**/atlas/v1/thumb/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
+  await page.route('**/atlas/v1/img/**', (route) => route.fulfill({ contentType: 'image/png', body: TINY_PNG }));
+  await page.route('**/api/dict/lookup*', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ found: true, lang: 'en', word: 'curious', phonetic: 'ˈkjʊəriəs', meaning: 'a. 好奇的', pos: 'a' }),
+  }));
+  await importBook(page);
+
+  // 索引尚未就绪就立刻点词：富卡此刻可能不在，但索引就绪后应自动补出（atlasReady 触发重解析）。
+  await page.locator('.chapter-body .word[data-word="curious"]').click();
+  const card = page.locator('.lookup-panel .atlas-card');
+  await expect(card).toBeVisible({ timeout: 10000 });
+  await expect(card.locator('.atlas-cefr')).toHaveText('A2');
+  expect(pageErrors).toEqual([]);
+});
