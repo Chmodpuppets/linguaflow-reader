@@ -68,7 +68,7 @@ test('mergeSnapshots：句子/标记/播放列表/书的本地独有记录都被
     sentences: [{ id: 's1', createdAt: old } as SavedSentence],
     highlights: [{ id: 'h1', createdAt: old } as Highlight],
     playlists: [{ id: 'p1', name: 'P', bookIds: [], createdAt: old }],
-    books: [{ id: 'book1', createdAt: old } as AppData['books'][number]],
+    books: [{ id: 'book1', createdAt: old } as unknown as AppData['books'][number]],
   };
   const incoming: AppData = { ...base, rev: 5 };
   const { data, preserved } = mergeSnapshots(local, incoming, NOW);

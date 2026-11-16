@@ -920,8 +920,11 @@ button.hero-book { cursor: pointer; font: inherit; }
 
 /* ── 补全重写组件引入但缺失的结构样式 ─────────────────────────── */
 .book-cover-button { display: block; flex: none; padding: 0; border: 0; background: none; cursor: pointer; }
-.book-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.book-title-row h3 { margin: 0; }
+.book-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.book-title-row h3 { margin: 0; flex: 1 1 auto; min-width: 0; }
+/* 书卡操作按钮成组：窄卡（多列网格）放不下时整组换到标题下一行，避免溢出到相邻书卡封面拦截点击。 */
+.book-actions { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.book-actions .icon-button.subtle { width: 26px; height: 26px; border-radius: 8px; }
 .book-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; color: var(--muted); font-size: 10.5px; }
 .book-tags > span { display: inline-flex; align-items: center; gap: 4px; }
 .icon-button.subtle { color: var(--faint); }
@@ -984,6 +987,20 @@ button.hero-book { cursor: pointer; font: inherit; }
 .tag-suggestions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted,#94a3b8); }
 .organize-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 640px) { .view-save { flex-direction: column; } .library-organize { align-items: stretch; } .organize-actions { width: 100%; } }
+
+/* 书籍元数据编辑（书名/作者/简介/封面） */
+.book-edit-modal { display: flex; flex-direction: column; gap: 14px; }
+.book-edit-modal .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.book-edit-modal .field span { opacity: .75; }
+.book-edit-modal .field input, .book-edit-modal .field textarea { width: 100%; }
+.book-edit-modal .field textarea { resize: vertical; min-height: 72px; font-family: inherit; }
+.cover-editor { display: flex; flex-direction: column; gap: 10px; }
+.cover-preview { width: 132px; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; border: 1px solid var(--line,rgba(148,163,184,.2)); background: rgba(18,18,28,.5); display: flex; align-items: center; justify-content: center; }
+.cover-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted,#94a3b8); font-size: 12px; }
+.cover-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cover-actions .muted { font-size: 11.5px; color: var(--muted,#94a3b8); }
+.cover-error { color: #fca5a5; font-size: 12.5px; margin: 0; }
 
 /* 课程播放列表 + 连续播放器 */
 .playlists-modal, .playlist-chooser { display: flex; flex-direction: column; gap: 14px; }
