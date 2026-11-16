@@ -1,8 +1,8 @@
 import { test, expect } from './base';
 import { test as plain, expect as plainExpect } from '@playwright/test';
 
-// 口语实验室练习目标：用户收藏句优先、分组清晰，书中段落只作兜底参考。
-test('收藏句进入练习目标并排在最前（分组清晰）', async ({ page }) => {
+// 口语实验室练习目标：收藏句卡片轨（取代下拉），收藏句优先、分组 Tab、搜索、试听、点卡即练。
+test('收藏句以卡片呈现并默认选中，可切 Tab/搜索/点卡切换', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
   await page.goto('/');
@@ -18,16 +18,30 @@ test('收藏句进入练习目标并排在最前（分组清晰）', async ({ pa
   await page.getByRole('button', { name: '收藏句子' }).click();
   await expect(page.getByRole('button', { name: '已收藏句子' })).toBeVisible();
 
-  // 进口语实验室
+  // 进口语实验室：卡片轨而非下拉
   await page.locator('.main-nav .nav-item', { hasText: '口语实验室' }).click();
   await page.locator('.voice-lab-page').waitFor();
-  const select = page.locator('.practice-target-select select');
-  // 第一个分组是「我的收藏句」，默认选中收藏句
-  await expect(select.locator('optgroup').first()).toHaveAttribute('label', '我的收藏句');
-  await expect(select).toHaveValue(/^sentence-/);
-  await expect(select.locator('optgroup[label="我的收藏句"] option', { hasText: 'curious fox' })).toHaveCount(1);
-  // 书中段落作为兜底参考单独分组
-  await expect(select.locator('optgroup[label="书中段落（非收藏）"]')).toHaveCount(1);
+  await expect(page.locator('.practice-picker')).toBeVisible();
+  await expect(page.locator('.practice-tab.active')).toContainText('我的收藏句');
+  const savedCard = page.locator('.practice-card', { hasText: 'curious fox' });
+  await expect(savedCard).toHaveCount(1);
+  await expect(savedCard).toHaveClass(/selected/);
+  await expect(savedCard.locator('.practice-listen')).toHaveCount(1);
+  await expect(savedCard.locator('.practice-words')).toContainText('词');
+
+  // 搜索过滤
+  await page.getByLabel('搜索练习句').fill('curious');
+  await expect(page.locator('.practice-card')).toHaveCount(1);
+  await page.getByLabel('搜索练习句').fill('zzzznomatch');
+  await expect(page.locator('.practice-rail-empty')).toBeVisible();
+  await page.getByLabel('搜索练习句').fill('');
+
+  // 切到书中段落 Tab，点卡即设为当前练习句
+  await page.locator('.practice-tab', { hasText: '书中段落' }).click();
+  const firstPara = page.locator('.practice-card').first();
+  await expect(firstPara).toBeVisible();
+  await firstPara.click();
+  await expect(firstPara).toHaveClass(/selected/);
   expect(pageErrors).toEqual([]);
 });
 
@@ -37,5 +51,5 @@ plain('空书架时练习目标给引导提示', async ({ page }) => {
   await page.locator('.main-nav .nav-item', { hasText: '口语实验室' }).click();
   await page.locator('.voice-lab-page').waitFor();
   await plainExpect(page.locator('.practice-empty-hint')).toBeVisible();
-  await plainExpect(page.locator('.practice-target-select select option')).toHaveCount(0);
+  await plainExpect(page.locator('.practice-card')).toHaveCount(0);
 });

@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：167
-总大小：1.80 MB
+文件数：170
+总大小：1.81 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -58,6 +58,7 @@
 - `src/components/Notes.tsx`
 - `src/components/OrphanAudioCleanup.tsx`
 - `src/components/PlaylistPlayer.tsx`
+- `src/components/PracticePicker.tsx`
 - `src/components/Reader.tsx`
 - `src/components/Review.tsx`
 - `src/components/Settings.tsx`
@@ -99,6 +100,7 @@
 - `src/lib/phrase.ts`
 - `src/lib/playlist.ts`
 - `src/lib/polish.ts`
+- `src/lib/practiceMeta.ts`
 - `src/lib/practiceTargets.ts`
 - `src/lib/prosody.ts`
 - `src/lib/remoteDictionary.ts`
@@ -164,6 +166,7 @@
 - `tests/unit/pdfBook.test.ts`
 - `tests/unit/phrase.test.ts`
 - `tests/unit/playlist.test.ts`
+- `tests/unit/practiceMeta.test.ts`
 - `tests/unit/practiceTargets.test.ts`
 - `tests/unit/prosody.test.ts`
 - `tests/unit/recommend.test.ts`

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, AudioLines, BarChart3, BookOpen, Check, ChevronDown, Clock3, Lightbulb, Mic2, MessageSquareText, Settings2, Sparkles } from 'lucide-react';
+import { ArrowRight, AudioLines, BarChart3, Check, Clock3, Lightbulb, Mic2, MessageSquareText, Settings2, Sparkles } from 'lucide-react';
 import type { Book, Highlight, SavedSentence, VocabEntry, VoiceMode, VoiceRecord } from '../types';
 import { extractKeywords, localDay } from '../lib/voice';
 import { groupShadowings, dueShadowings } from '../lib/spacedShadowing';
 import { buildPracticeTargets, type PracticeTarget } from '../lib/practiceTargets';
+import { practiceMetaMap, defaultTarget } from '../lib/practiceMeta';
+import PracticePicker from './PracticePicker';
 import VoiceRecorder from './VoiceRecorder';
 import { Button, ConfirmDialog } from './UI';
 
@@ -36,10 +38,13 @@ export default function VoiceLab({ books, highlights, sentences, vocabulary, voi
   const requestSwitch = (action: () => void) => { if (!recordingActive) action(); else setPendingSwitch(() => action); };
 
   const targets = useMemo<PracticeTarget[]>(() => buildPracticeTargets(books, highlights, sentences, mode), [books, highlights, sentences, mode]);
-  const targetGroups = useMemo(() => (['sentence', 'highlight', 'paragraph'] as const)
-    .map((group) => ({ group, items: targets.filter((target) => target.group === group) }))
-    .filter((entry) => entry.items.length > 0), [targets]);
-  const selected = customTarget || targets.find((target) => target.id === targetId) || targets[0];
+  const metaMap = useMemo(() => practiceMetaMap(voiceRecords, Date.now()), [voiceRecords]);
+  const selected = customTarget || targets.find((target) => target.id === targetId) || defaultTarget(targets, metaMap);
+  const selectTarget = (id: string) => requestSwitch(() => {
+    if (customTarget && id === customTarget.id) { setTargetId(id); return; }
+    setCustomTarget(null);
+    setTargetId(id);
+  });
   const challenge = useMemo(() => [...vocabulary].sort((a, b) => a.dueAt.localeCompare(b.dueAt)).slice(0, 4), [vocabulary]);
   const shadowGroups = useMemo(() => groupShadowings(voiceRecords), [voiceRecords]);
   const dueShadows = useMemo(() => dueShadowings(shadowGroups, Date.now()).slice(0, 4), [shadowGroups]);
@@ -58,7 +63,7 @@ export default function VoiceLab({ books, highlights, sentences, vocabulary, voi
     <div className="voice-lab-layout">
       <main className="voice-workbench glass-panel">
         <div className="workbench-head"><div><span className="eyebrow">{modes.find((item) => item.id === mode)?.en.toUpperCase()}</span><h2>{mode === 'shadowing' ? '听清差距，再缩小差距' : mode === 'retell' ? '放下原文，保留意义' : '今天，用英语说点真的'}</h2></div><span className="local-pill">LOCAL-FIRST</span></div>
-        {mode !== 'freetalk' && <div className="practice-target-select"><label>{mode === 'shadowing' ? '选择你的收藏句、标记或书中段落' : '选择要复述的段落'}</label><div className="select-wrap"><BookOpen size={16} /><select value={selected?.id || ''} onChange={(event) => { const value = event.target.value; requestSwitch(() => { setCustomTarget(null); setTargetId(value); }); }}>{customTarget && <option value={customTarget.id}>{customTarget.source} — {customTarget.text.slice(0, 55)}{customTarget.text.length > 55 ? '…' : ''}</option>}{targetGroups.map(({ group, items }) => <optgroup key={group} label={group === 'sentence' ? '我的收藏句' : group === 'highlight' ? '我的标记' : '书中段落（非收藏）'}>{items.map((target) => <option key={target.id} value={target.id}>{target.source} — {target.text.slice(0, 55)}{target.text.length > 55 ? '…' : ''}</option>)}</optgroup>)}</select><ChevronDown size={15} /></div>{!targets.length && <p className="practice-empty-hint">还没有收藏句或标记。先在阅读页轻点单词「收藏句子」、或划选做标记；也可以导入一本书，书中段落会作为兜底参考出现在这里。</p>}</div>}
+        {mode !== 'freetalk' && <PracticePicker targets={targets} customTarget={customTarget} selectedId={selected?.id} metaMap={metaMap} onSelect={selectTarget} />}
         {mode === 'retell' && selected && <div className="keyword-scaffold"><span>你的表达脚手架</span><div>{keywords.map((word, index) => <strong key={word}><i>0{index + 1}</i>{word}</strong>)}</div><p>60 秒 · 不看原文 · 不求逐字一致，只求意义完整</p></div>}
         {mode === 'freetalk' && <div className="free-talk-prompt"><div><span className="eyebrow">TODAY'S PROMPT</span><h3>What small detail caught your attention today, and why did it stay with you?</h3><p>试着说 60–90 秒。右侧目标词一旦被识别，就会立即点亮。</p></div><div className="activation-grid">{challenge.map((entry) => { const active = activated.has(entry.word); return <div className={active ? 'activated' : ''} key={entry.id}><span>{active ? <Check size={15} /> : <Sparkles size={15} />}</span><strong>{entry.word}</strong><small>{active ? '刚刚说出口' : entry.dictionary?.chinese || '待激活'} · 已用 {entry.spokenCount || 0} 次</small></div>; })}</div></div>}
         <VoiceRecorder key={`${mode}-${selected?.id || 'free'}`} targetText={mode === 'freetalk' ? '' : selected?.text || ''} mode={mode} audioUrl={mode === 'shadowing' ? selected?.audioUrl : undefined} bookId={selected?.bookId} noteId={selected?.noteId} hideTarget={mode === 'retell'} maxDuration={mode === 'retell' ? 60 : 0} challengeWords={mode === 'freetalk' ? challenge.map((entry) => entry.word) : []} onActivateWord={mode === 'freetalk' ? activate : undefined} onSave={saveRecord} onActiveChange={setRecordingActive} />
