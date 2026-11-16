@@ -1,5 +1,5 @@
-import { lazy, Suspense, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, AudioLines, Bookmark, BookOpen, BookOpenCheck, ChevronDown, ChevronUp, Clock3, Compass, FileUp, Flame, FolderOpen, ImagePlus, Import, Library as LibraryIcon, ListMusic, ListPlus, Minus, Pencil, Play, Plus, Search, Sparkles, Tags, Target, Trash2, Type, X } from 'lucide-react';
+import { lazy, Suspense, useDeferredValue, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, AudioLines, Bookmark, BookOpen, BookOpenCheck, ChevronDown, ChevronUp, Clock3, Compass, FileUp, Flame, FolderOpen, ImagePlus, Import, Library as LibraryIcon, ListMusic, ListPlus, Minus, Pencil, Play, Plus, Search, Sparkles, Tags, Target, TextSearch, Trash2, Type, X } from 'lucide-react';
 import type { Book, LibraryView, Playlist } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 const LessonBuilder = lazy(() => import('./LessonBuilder'));
@@ -9,6 +9,7 @@ import { bookDifficulty, coldStartPick, recommendBook } from '../lib/difficulty'
 import { allTags, filterByTag, parseTags, viewMatches } from '../lib/libraryOrganize';
 import { moveBook, resolvePlaylistBooks } from '../lib/playlist';
 import { buildBookUpdate, isCoverFile, resizeCoverImage } from '../lib/bookMeta';
+import { searchLibrary } from '../lib/searchLibrary';
 import type { ImportProgress } from '../lib/epub';
 
 export interface LibraryStats { known: number; learning: number; streak: number; today: number; goal: number }
@@ -45,9 +46,13 @@ function DifficultyBadge({ book, known }: { book: Book; known: ReadonlySet<strin
   return <span className={`difficulty-badge band-${diff.band.key}`} title={`词频加权覆盖率 ${diff.coverage}%：书中约 ${diff.coverage}% 的词次你已认识`}>{diff.band.label} · {diff.coverage}%</span>;
 }
 
-export default function Library({ books, knownWords, onOpen, onImport, onImportText, onLessonCreated, onDelete, importing, importProgress, stats, onGoal, views, onSaveView, onDeleteView, onSetTags, onUpdateBook, playlists, onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onAddToPlaylist, onRemoveFromPlaylist, onReorderPlaylist }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onLessonCreated?: (book: Book) => void; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void; views?: LibraryView[]; onSaveView?: (view: Omit<LibraryView, 'id'>) => void; onDeleteView?: (id: string) => void; onSetTags?: (id: string, tags: string[]) => void; onUpdateBook?: (id: string, update: Partial<Book>) => void; playlists?: Playlist[]; onCreatePlaylist?: (name: string) => string; onDeletePlaylist?: (id: string) => void; onRenamePlaylist?: (id: string, name: string) => void; onAddToPlaylist?: (playlistId: string, bookId: string) => void; onRemoveFromPlaylist?: (playlistId: string, bookId: string) => void; onReorderPlaylist?: (playlistId: string, bookIds: string[]) => void }) {
+export default function Library({ books, knownWords, onOpen, onImport, onImportText, onLessonCreated, onDelete, importing, importProgress, stats, onGoal, views, onSaveView, onDeleteView, onSetTags, onUpdateBook, playlists, onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onAddToPlaylist, onRemoveFromPlaylist, onReorderPlaylist, onOpenSource }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onLessonCreated?: (book: Book) => void; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void; views?: LibraryView[]; onSaveView?: (view: Omit<LibraryView, 'id'>) => void; onDeleteView?: (id: string) => void; onSetTags?: (id: string, tags: string[]) => void; onUpdateBook?: (id: string, update: Partial<Book>) => void; playlists?: Playlist[]; onCreatePlaylist?: (name: string) => string; onDeletePlaylist?: (id: string) => void; onRenamePlaylist?: (id: string, name: string) => void; onAddToPlaylist?: (playlistId: string, bookId: string) => void; onRemoveFromPlaylist?: (playlistId: string, bookId: string) => void; onReorderPlaylist?: (playlistId: string, bookIds: string[]) => void; onOpenSource?: (item: { bookId: string; chapterId: string; paragraphIndex: number }) => void }) {
   const knownSet = useMemo(() => new Set((knownWords || []).map((word) => word.toLowerCase())), [knownWords]);
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [fullQuery, setFullQuery] = useState('');
+  const deferredFullQuery = useDeferredValue(fullQuery);
+  const searchHits = useMemo(() => searchLibrary(books, deferredFullQuery), [books, deferredFullQuery]);
   const [sortMode, setSortMode] = useState<'default' | 'match'>('default');
   const [onlyIdeal, setOnlyIdeal] = useState(false);
   const [activeTag, setActiveTag] = useState('');
@@ -173,7 +178,7 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
         <div className="continue-action"><div className="progress-ring" style={{ '--progress': `${recent.progress * 3.6}deg` } as React.CSSProperties}><span>{recent.progress}%</span></div><Button onClick={() => onOpen(recent)}>继续阅读<ArrowRight size={17} /></Button></div>
       </div>
     </section>}
-    <div className="library-toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书库" /></div><div className="library-stats"><LibraryIcon size={16} /><span>{books.length} 本书</span><span>平均进度 {totalProgress}%</span></div></div>
+    <div className="library-toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书库" /></div><button className="fulltext-button" onClick={() => setSearchOpen(true)} aria-label="全文搜索"><TextSearch size={15} />全文搜索</button><div className="library-stats"><LibraryIcon size={16} /><span>{books.length} 本书</span><span>平均进度 {totalProgress}%</span></div></div>
     {(tags.length > 0 || (views && views.length > 0) || onSaveView || onCreatePlaylist) && <div className="library-organize">
       <div className="tag-chips" role="group" aria-label="按标签筛选"><button className={`filter-chip ${activeTag === '' ? 'active' : ''}`} onClick={() => setActiveTag('')}>全部</button>{tags.map((tag) => <button key={tag} className={`filter-chip ${activeTag === tag ? 'active' : ''}`} aria-pressed={activeTag === tag} onClick={() => setActiveTag(activeTag === tag ? '' : tag)}><Tags size={13} />{tag}</button>)}</div>
       <div className="organize-actions">
@@ -235,5 +240,14 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       {onCreatePlaylist && <form className="view-save" onSubmit={(event) => { event.preventDefault(); const name = newPlaylistForBook.trim(); if (!name) return; const id = onCreatePlaylist(name); onAddToPlaylist?.(id, addBookTarget.id); setAddBookTarget(null); }}><input value={newPlaylistForBook} onChange={(event) => setNewPlaylistForBook(event.target.value)} placeholder="新建播放列表名称" aria-label="新建播放列表名称" /><Button type="submit" disabled={!newPlaylistForBook.trim()}><Plus size={15} />创建并加入</Button></form>}
     </div></Modal>}
     {playerPlaylist && <Modal title={`连续播放 · ${playerPlaylist.name}`} eyebrow="NOW PLAYING" onClose={() => setPlayerPlaylist(null)}><Suspense fallback={<p className="muted">正在加载播放器…</p>}><PlaylistPlayer books={playerBooks} onOpenBook={(book) => { setPlayerPlaylist(null); onOpen(book); }} /></Suspense></Modal>}
+    {searchOpen && <Modal title="全文搜索" eyebrow="SEARCH IN BOOKS" onClose={() => setSearchOpen(false)}><div className="fulltext-modal">
+      <div className="search-box fulltext-input"><Search size={17} /><input autoFocus value={fullQuery} onChange={(event) => setFullQuery(event.target.value)} placeholder="输入词或短语，在所有书籍正文里查找…" aria-label="全文搜索关键词" /></div>
+      {deferredFullQuery.trim()
+        ? (searchHits.length
+          ? <><p className="fulltext-count">找到 {searchHits.length} 处{searchHits.length >= 80 ? '（已截断，细化关键词可缩小范围）' : ''} · 每本书最多 10 处</p>
+            <ul className="fulltext-results">{searchHits.map((hit) => <li key={`${hit.bookId}-${hit.chapterId}-${hit.paragraphIndex}`}><button className="search-hit" onClick={() => { onOpenSource?.({ bookId: hit.bookId, chapterId: hit.chapterId, paragraphIndex: hit.paragraphIndex }); setSearchOpen(false); }}><span className="hit-source"><BookOpen size={13} />{hit.bookTitle} · {hit.chapterTitle}</span><span className="hit-snippet">{hit.snippet.before}<mark>{hit.snippet.match}</mark>{hit.snippet.after}</span></button></li>)}</ul></>
+          : <p className="views-empty">没有找到包含「{deferredFullQuery.trim()}」的正文。换个词或短语试试。</p>)
+        : <p className="modal-lead">在全部书籍的正文里查找词或短语，点击结果直接跳到原文所在段落。</p>}
+    </div></Modal>}
   </div>;
 }

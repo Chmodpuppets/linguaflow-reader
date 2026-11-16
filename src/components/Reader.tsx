@@ -181,7 +181,12 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     setLookup(null);
     setSelection(null);
     const target = book.currentParagraph;
-    if (chapterIndex === book.currentChapter && target > 0) setTimeout(() => document.getElementById(`paragraph-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+    if (chapterIndex === book.currentChapter && target > 0) setTimeout(() => {
+      const el = document.getElementById(`paragraph-${target}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 跳转落地（全文搜索 / 词汇来源 / 续读）时给目标段一个短暂高亮，让用户看清落点。
+      if (el) { el.classList.add('paragraph-flash'); setTimeout(() => el.classList.remove('paragraph-flash'), 1600); }
+    }, 80);
     else articleRef.current?.closest('.main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [chapterIndex]);
 
