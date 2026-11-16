@@ -1,11 +1,13 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react';
-import { ArrowRight, AudioLines, Bookmark, BookOpen, BookOpenCheck, Clock3, Compass, FileUp, Flame, FolderOpen, Import, Library as LibraryIcon, Minus, Plus, Search, Sparkles, Tags, Target, Trash2, Type } from 'lucide-react';
-import type { Book, LibraryView } from '../types';
+import { ArrowLeft, ArrowRight, AudioLines, Bookmark, BookOpen, BookOpenCheck, ChevronDown, ChevronUp, Clock3, Compass, FileUp, Flame, FolderOpen, Import, Library as LibraryIcon, ListMusic, ListPlus, Minus, Play, Plus, Search, Sparkles, Tags, Target, Trash2, Type } from 'lucide-react';
+import type { Book, LibraryView, Playlist } from '../types';
 import { Button, EmptyState, Modal, ProgressBar } from './UI';
 const LessonBuilder = lazy(() => import('./LessonBuilder'));
+const PlaylistPlayer = lazy(() => import('./PlaylistPlayer'));
 import { readingMinutes } from '../lib/utils';
 import { bookDifficulty, coldStartPick, recommendBook } from '../lib/difficulty';
 import { allTags, filterByTag, parseTags, viewMatches } from '../lib/libraryOrganize';
+import { moveBook, resolvePlaylistBooks } from '../lib/playlist';
 import type { ImportProgress } from '../lib/epub';
 
 export interface LibraryStats { known: number; learning: number; streak: number; today: number; goal: number }
@@ -42,7 +44,7 @@ function DifficultyBadge({ book, known }: { book: Book; known: ReadonlySet<strin
   return <span className={`difficulty-badge band-${diff.band.key}`} title={`词频加权覆盖率 ${diff.coverage}%：书中约 ${diff.coverage}% 的词次你已认识`}>{diff.band.label} · {diff.coverage}%</span>;
 }
 
-export default function Library({ books, knownWords, onOpen, onImport, onImportText, onLessonCreated, onDelete, importing, importProgress, stats, onGoal, views, onSaveView, onDeleteView, onSetTags }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onLessonCreated?: (book: Book) => void; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void; views?: LibraryView[]; onSaveView?: (view: Omit<LibraryView, 'id'>) => void; onDeleteView?: (id: string) => void; onSetTags?: (id: string, tags: string[]) => void }) {
+export default function Library({ books, knownWords, onOpen, onImport, onImportText, onLessonCreated, onDelete, importing, importProgress, stats, onGoal, views, onSaveView, onDeleteView, onSetTags, playlists, onCreatePlaylist, onDeletePlaylist, onRenamePlaylist, onAddToPlaylist, onRemoveFromPlaylist, onReorderPlaylist }: { books: Book[]; knownWords?: string[]; onOpen: (book: Book) => void; onImport: (file: File) => Promise<void>; onImportText: (title: string, text: string) => Promise<void>; onLessonCreated?: (book: Book) => void; onDelete?: (id: string) => void; importing: boolean; importProgress?: ImportProgress | null; stats?: LibraryStats; onGoal?: (goal: number) => void; views?: LibraryView[]; onSaveView?: (view: Omit<LibraryView, 'id'>) => void; onDeleteView?: (id: string) => void; onSetTags?: (id: string, tags: string[]) => void; playlists?: Playlist[]; onCreatePlaylist?: (name: string) => string; onDeletePlaylist?: (id: string) => void; onRenamePlaylist?: (id: string, name: string) => void; onAddToPlaylist?: (playlistId: string, bookId: string) => void; onRemoveFromPlaylist?: (playlistId: string, bookId: string) => void; onReorderPlaylist?: (playlistId: string, bookIds: string[]) => void }) {
   const knownSet = useMemo(() => new Set((knownWords || []).map((word) => word.toLowerCase())), [knownWords]);
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState<'default' | 'match'>('default');
@@ -65,6 +67,17 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
   const applyView = (view: LibraryView) => { setQuery(view.query); setSortMode(view.sortMode); setOnlyIdeal(view.onlyIdeal); setActiveTag(view.tag); setViewsOpen(false); };
   const currentView = { query, sortMode, onlyIdeal, tag: activeTag };
   const openTagEditor = (book: Book) => { setTagEditBook(book); setTagDraft((book.tags || []).join('，')); };
+  // 播放列表：管理弹窗（列表 / 选中某列表管理曲目）+ 书卡「加入播放列表」选择器 + 连续播放器。
+  const [playlistsOpen, setPlaylistsOpen] = useState(false);
+  const [playlistName, setPlaylistName] = useState('');
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null);
+  const [addBookTarget, setAddBookTarget] = useState<Book | null>(null);
+  const [newPlaylistForBook, setNewPlaylistForBook] = useState('');
+  const [playerPlaylist, setPlayerPlaylist] = useState<Playlist | null>(null);
+  const selectedPlaylist = (playlists || []).find((p) => p.id === selectedPlaylistId) || null;
+  const playerBooks = useMemo(() => (playerPlaylist ? resolvePlaylistBooks(playerPlaylist, books) : []), [playerPlaylist, books]);
+  const openPlaylists = () => { setSelectedPlaylistId(null); setPlaylistsOpen(true); };
+  const moveTrack = (playlist: Playlist, from: number, to: number) => { if (onReorderPlaylist) onReorderPlaylist(playlist.id, moveBook(playlist.bookIds, from, to)); };
   const diffs = useMemo(() => new Map(books.map((book) => [book.id, bookDifficulty(book, knownSet)])), [books, knownSet]);
   const canMatch = knownSet.size > 0;
   const recommendation = useMemo(() => recommendBook(books, knownSet), [books, knownSet]);
@@ -144,14 +157,17 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       </div>
     </section>}
     <div className="library-toolbar"><div className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书库" /></div><div className="library-stats"><LibraryIcon size={16} /><span>{books.length} 本书</span><span>平均进度 {totalProgress}%</span></div></div>
-    {(tags.length > 0 || (views && views.length > 0) || onSaveView) && <div className="library-organize">
+    {(tags.length > 0 || (views && views.length > 0) || onSaveView || onCreatePlaylist) && <div className="library-organize">
       <div className="tag-chips" role="group" aria-label="按标签筛选"><button className={`filter-chip ${activeTag === '' ? 'active' : ''}`} onClick={() => setActiveTag('')}>全部</button>{tags.map((tag) => <button key={tag} className={`filter-chip ${activeTag === tag ? 'active' : ''}`} aria-pressed={activeTag === tag} onClick={() => setActiveTag(activeTag === tag ? '' : tag)}><Tags size={13} />{tag}</button>)}</div>
-      {onSaveView && <button className="views-button" onClick={() => setViewsOpen(true)}><Bookmark size={15} />视图{views && views.length ? ` · ${views.length}` : ''}</button>}
+      <div className="organize-actions">
+        {onCreatePlaylist && <button className="views-button playlists-button" onClick={openPlaylists}><ListMusic size={15} />播放列表{playlists && playlists.length ? ` · ${playlists.length}` : ''}</button>}
+        {onSaveView && <button className="views-button" onClick={() => setViewsOpen(true)}><Bookmark size={15} />视图{views && views.length ? ` · ${views.length}` : ''}</button>}
+      </div>
     </div>}
     {canMatch && <div className="library-tools" role="group" aria-label="选书排序与筛选"><div className="seg-control"><button className={sortMode === 'default' ? 'active' : ''} onClick={() => setSortMode('default')}>综合</button><button className={sortMode === 'match' ? 'active' : ''} onClick={() => setSortMode('match')}><Sparkles size={14} />难度匹配</button></div><button className={`filter-chip ${onlyIdeal ? 'active' : ''}`} aria-pressed={onlyIdeal} onClick={() => setOnlyIdeal((v) => !v)}>只看 i+1 · 匹配你的水平</button><span className="tools-hint">覆盖率 90–98% 为 i+1：多数词认识、少量新词，读得动又有收获。</span></div>}
     {displayed.length ? <div className="book-grid">{displayed.map((book) => <article className="book-card glass-panel" key={book.id}>
       <button className="book-cover-button" onClick={() => onOpen(book)} aria-label={`打开《${book.title}》`}><div className={`book-cover${book.coverImage ? ' has-image' : ''}`} style={{ '--accent': book.accent } as React.CSSProperties}>{book.coverImage ? <img className="book-cover-img" src={book.coverImage} alt="" /> : <><span className="cover-kicker">LINGUAFLOW</span><strong>{book.title}</strong><i>{book.author}</i></>}</div></button>
-      <div className="book-info"><div className="book-title-row"><h3>{book.title}</h3>{onSetTags && <button className="icon-button subtle" onClick={() => openTagEditor(book)} aria-label={`给《${book.title}》加标签`}><Tags size={15} /></button>}{onDelete && book.source !== 'sample' && <button className="icon-button subtle" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`}><Trash2 size={15} /></button>}</div><p>{book.author}</p><div className="book-tags">{book.level && <span className="level-badge">{book.level}</span>}<DifficultyBadge book={book} known={knownSet} /><span>{book.chapters.length} 章</span><span>{book.source === 'epub' ? 'EPUB' : book.source === 'pdf' ? 'PDF' : book.source === 'text' ? '文本' : book.level ? '分级' : '样书'}</span>{(book.tags || []).map((tag) => <button className="book-tag" key={tag} onClick={() => setActiveTag(tag)} title={`按「${tag}」筛选`}>{tag}</button>)}</div><div className="book-progress"><ProgressBar value={book.progress} /><span>{book.progress}%</span></div><Button variant="secondary" size="sm" onClick={() => onOpen(book)}><BookOpen size={15} />{book.progress ? '继续阅读' : '开始阅读'}</Button></div>
+      <div className="book-info"><div className="book-title-row"><h3>{book.title}</h3>{onAddToPlaylist && <button className="icon-button subtle" onClick={() => { setAddBookTarget(book); setNewPlaylistForBook(''); }} aria-label={`把《${book.title}》加入播放列表`}><ListPlus size={15} /></button>}{onSetTags && <button className="icon-button subtle" onClick={() => openTagEditor(book)} aria-label={`给《${book.title}》加标签`}><Tags size={15} /></button>}{onDelete && book.source !== 'sample' && <button className="icon-button subtle" onClick={() => onDelete(book.id)} aria-label={`删除《${book.title}》`}><Trash2 size={15} /></button>}</div><p>{book.author}</p><div className="book-tags">{book.level && <span className="level-badge">{book.level}</span>}<DifficultyBadge book={book} known={knownSet} /><span>{book.chapters.length} 章</span><span>{book.source === 'epub' ? 'EPUB' : book.source === 'pdf' ? 'PDF' : book.source === 'text' ? '文本' : book.level ? '分级' : '样书'}</span>{(book.tags || []).map((tag) => <button className="book-tag" key={tag} onClick={() => setActiveTag(tag)} title={`按「${tag}」筛选`}>{tag}</button>)}</div><div className="book-progress"><ProgressBar value={book.progress} /><span>{book.progress}%</span></div><Button variant="secondary" size="sm" onClick={() => onOpen(book)}><BookOpen size={15} />{book.progress ? '继续阅读' : '开始阅读'}</Button></div>
     </article>)}</div> : <EmptyState icon={<LibraryIcon size={28} />} title={books.length ? '没有找到这本书' : '书架还是空的'} description={books.length ? '换一个关键词，或导入你自己的 EPUB / PDF / 文本。' : '把 EPUB / PDF / 文本拖进来，或选择你的书籍文件夹，开始搭建自己的书架。'} action={<Button onClick={() => { setImportTab('epub'); setImportOpen(true); }}>导入内容</Button>} />}
     {importOpen && <Modal title={importTab === 'epub' ? '导入书籍' : importTab === 'audio' ? '音频/字幕建课' : '粘贴文本'} onClose={() => setImportOpen(false)}>
       <div className="import-tabs segmented" role="group" aria-label="导入方式"><button className={importTab === 'epub' ? 'active' : ''} onClick={() => setImportTab('epub')}>EPUB / PDF 文件</button><button className={importTab === 'text' ? 'active' : ''} onClick={() => setImportTab('text')}>粘贴文本</button><button className={importTab === 'audio' ? 'active' : ''} onClick={() => setImportTab('audio')}><AudioLines size={14} />音频/字幕建课</button></div>
@@ -168,5 +184,22 @@ export default function Library({ books, knownWords, onOpen, onImport, onImportT
       {tags.length > 0 && <div className="tag-suggestions"><span>快速添加：</span>{tags.map((tag) => <button key={tag} className="filter-chip" onClick={() => setTagDraft((prev) => (parseTags(prev).some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...parseTags(prev), tag].join('，'))) }>{tag}</button>)}</div>}
       <div className="modal-actions"><Button variant="ghost" onClick={() => setTagEditBook(null)}>取消</Button><Button onClick={() => { if (onSetTags) onSetTags(tagEditBook.id, parseTags(tagDraft)); setTagEditBook(null); }}><Tags size={16} />保存标签</Button></div>
     </div></Modal>}
+    {playlistsOpen && <Modal title="播放列表" eyebrow="PLAYLISTS" onClose={() => setPlaylistsOpen(false)}><div className="playlists-modal">
+      {selectedPlaylist ? <div className="playlist-detail">
+        <button className="playlist-back" onClick={() => setSelectedPlaylistId(null)}><ArrowLeft size={15} />全部播放列表</button>
+        <label className="field"><span>名称</span><input value={selectedPlaylist.name} onChange={(event) => onRenamePlaylist?.(selectedPlaylist.id, event.target.value)} aria-label="播放列表名称" /></label>
+        <div className="playlist-detail-actions"><Button disabled={!resolvePlaylistBooks(selectedPlaylist, books).length} onClick={() => { setPlayerPlaylist(selectedPlaylist); setPlaylistsOpen(false); }}><Play size={16} />连续播放</Button><span className="muted">{resolvePlaylistBooks(selectedPlaylist, books).length} 首 · 无音频的书会自动跳过</span></div>
+        {resolvePlaylistBooks(selectedPlaylist, books).length ? <ul className="playlist-tracks">{resolvePlaylistBooks(selectedPlaylist, books).map((book, index) => <li key={book.id}><span className="track-index">{index + 1}</span><span className="track-title">{book.title}</span><span className="track-actions"><button className="icon-button subtle" disabled={index === 0} onClick={() => moveTrack(selectedPlaylist, index, index - 1)} aria-label={`上移 ${book.title}`}><ChevronUp size={15} /></button><button className="icon-button subtle" disabled={index === selectedPlaylist.bookIds.length - 1} onClick={() => moveTrack(selectedPlaylist, index, index + 1)} aria-label={`下移 ${book.title}`}><ChevronDown size={15} /></button><button className="icon-button subtle" onClick={() => onRemoveFromPlaylist?.(selectedPlaylist.id, book.id)} aria-label={`从播放列表移除 ${book.title}`}><Trash2 size={15} /></button></span></li>)}</ul> : <p className="views-empty">这个播放列表还是空的。在书卡上点「加入播放列表」把带音频的书/课程加进来。</p>}
+      </div> : <div className="playlist-list-view">
+        <p className="modal-lead">把多本带音频的书或课程排成队列，连续播放——通勤、睡前磨耳朵，不用一本本手动切。</p>
+        {playlists && playlists.length ? <ul className="views-list playlist-list">{playlists.map((playlist) => <li key={playlist.id}><button className="view-apply" onClick={() => setSelectedPlaylistId(playlist.id)}><ListMusic size={15} /><span>{playlist.name}</span><small>{playlist.bookIds.length} 首</small></button><button className="icon-button subtle" disabled={!playlist.bookIds.length} onClick={() => { setPlayerPlaylist(playlist); setPlaylistsOpen(false); }} aria-label={`播放 ${playlist.name}`}><Play size={15} /></button>{onDeletePlaylist && <button className="icon-button subtle" onClick={() => onDeletePlaylist(playlist.id)} aria-label={`删除播放列表 ${playlist.name}`}><Trash2 size={15} /></button>}</li>)}</ul> : <p className="views-empty">还没有播放列表。在下面起个名字创建第一个，比如「睡前听力」「本周课程」。</p>}
+        {onCreatePlaylist && <form className="view-save" onSubmit={(event) => { event.preventDefault(); const name = playlistName.trim(); if (!name) return; onCreatePlaylist(name); setPlaylistName(''); }}><input value={playlistName} onChange={(event) => setPlaylistName(event.target.value)} placeholder="播放列表名称，如「睡前听力」" aria-label="播放列表名称" /><Button type="submit" disabled={!playlistName.trim()}><Plus size={15} />创建播放列表</Button></form>}
+      </div>}
+    </div></Modal>}
+    {addBookTarget && <Modal title={`把《${addBookTarget.title}》加入播放列表`} eyebrow="ADD TO PLAYLIST" onClose={() => setAddBookTarget(null)}><div className="playlist-chooser">
+      {playlists && playlists.length ? <ul className="views-list playlist-list">{playlists.map((playlist) => <li key={playlist.id}><button className="view-apply" onClick={() => { onAddToPlaylist?.(playlist.id, addBookTarget.id); setAddBookTarget(null); }}><ListMusic size={15} /><span>{playlist.name}</span><small>{playlist.bookIds.includes(addBookTarget.id) ? '已在列表' : `${playlist.bookIds.length} 首`}</small></button></li>)}</ul> : <p className="views-empty">还没有播放列表。在下面创建一个并立即加入这本书。</p>}
+      {onCreatePlaylist && <form className="view-save" onSubmit={(event) => { event.preventDefault(); const name = newPlaylistForBook.trim(); if (!name) return; const id = onCreatePlaylist(name); onAddToPlaylist?.(id, addBookTarget.id); setAddBookTarget(null); }}><input value={newPlaylistForBook} onChange={(event) => setNewPlaylistForBook(event.target.value)} placeholder="新建播放列表名称" aria-label="新建播放列表名称" /><Button type="submit" disabled={!newPlaylistForBook.trim()}><Plus size={15} />创建并加入</Button></form>}
+    </div></Modal>}
+    {playerPlaylist && <Modal title={`连续播放 · ${playerPlaylist.name}`} eyebrow="NOW PLAYING" onClose={() => setPlayerPlaylist(null)}><Suspense fallback={<p className="muted">正在加载播放器…</p>}><PlaylistPlayer books={playerBooks} onOpenBook={(book) => { setPlayerPlaylist(null); onOpen(book); }} /></Suspense></Modal>}
   </div>;
 }

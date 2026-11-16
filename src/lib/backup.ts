@@ -67,5 +67,13 @@ export function validateBackup(parsed: unknown): AppData {
       if (!view || !str(view.id) || !str(view.name) || !str(view.query) || !['default', 'match'].includes(String(view.sortMode)) || typeof view.onlyIdeal !== 'boolean' || !str(view.tag)) throw new Error(`第 ${index + 1} 个保存的视图损坏`);
     });
   }
+  // 播放列表是后加字段：旧备份没有时跳过（恢复端回退 []），有则逐条校验。
+  if (raw.playlists !== undefined) {
+    if (!Array.isArray(raw.playlists)) throw new Error('播放列表格式不正确');
+    (raw.playlists as unknown[]).forEach((item, index) => {
+      const playlist = item as Record<string, unknown>;
+      if (!playlist || !str(playlist.id) || !str(playlist.name) || !str(playlist.createdAt) || !Array.isArray(playlist.bookIds) || (playlist.bookIds as unknown[]).some((id) => !str(id))) throw new Error(`第 ${index + 1} 个播放列表损坏`);
+    });
+  }
   return parsed as AppData;
 }

@@ -45,6 +45,15 @@ export interface LibraryView {
   tag: string;
 }
 
+/** 课程播放列表：把多本带音频的书/课程排成队列连续播放（LingQ playlist）。旧备份无此字段时回退 []。 */
+export interface Playlist {
+  id: string;
+  name: string;
+  /** 有序 bookId 队列；播放时按序解析音频，无音频的书自动跳过。 */
+  bookIds: string[];
+  createdAt: string;
+}
+
 export interface DictionaryEntry {
   word: string;
   phonetic: string;
@@ -182,6 +191,8 @@ export interface AppData {
   glosses?: Record<string, WordGloss>;
   /** 书库保存的视图。旧备份无此字段时回退 []。 */
   libraryViews?: LibraryView[];
+  /** 课程播放列表。旧备份无此字段时回退 []。 */
+  playlists?: Playlist[];
   /** 单调递增的数据修订号：跨标签页同步用来判断哪份快照更新，避免旧标签页整份覆盖新数据。旧备份无此字段时回退 0。 */
   rev?: number;
   settings: ReaderSettings;
