@@ -6,6 +6,7 @@ const STORE = 'workspace';
 const VOICE_STORE = 'voice-audio';
 const BOOK_AUDIO_STORE = 'book-audio';
 const ALIGNMENT_STORE = 'alignment';
+const TTS_AUDIO_STORE = 'tts-audio';
 const KEY = 'reader-data-v1';
 
 /** 最近一次成功读写的通道，供设置页如实展示存储状态（而不是把「初始化完成」当成「IDB 已连接」）。 */
@@ -49,7 +50,7 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 function openDatabase(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 4);
+    const request = indexedDB.open(DB_NAME, 5);
     let settled = false;
     // 旧标签页握着低版本连接时 open(4) 会触发 blocked 且永不 settle；
     // 没有超时兜底的话 loadData 的 catch 接不到 hang，App 会永久停在 loading。
@@ -66,6 +67,8 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(BOOK_AUDIO_STORE)) db.createObjectStore(BOOK_AUDIO_STORE);
       // 运行时 Whisper 对齐结果，按 bookId 存 {t,s,e}[]。
       if (!db.objectStoreNames.contains(ALIGNMENT_STORE)) db.createObjectStore(ALIGNMENT_STORE);
+      // 用户自带 Qwen TTS 合成出的音频，按内容键存 {blob,at}，刷新/重启后 0 请求复用。
+      if (!db.objectStoreNames.contains(TTS_AUDIO_STORE)) db.createObjectStore(TTS_AUDIO_STORE);
     };
     request.onsuccess = () => {
       if (settled) { request.result.close(); return; }
@@ -232,4 +235,74 @@ export function listAlignmentIds(): Promise<string[]> {
     request.onsuccess = () => resolve((request.result as IDBValidKey[]).map(String));
     request.onerror = () => reject(request.error);
   }));
+}
+
+// —— 用户自带 Qwen TTS 合成音频（持久缓存，按内容键存；刷新/重启后 0 请求复用）——
+// 存 {blob,at,size} 而非裸 Blob，是为了能按时间/体积做有界淘汰（音频会越攒越多）。
+export interface TtsAudioRecord { blob: Blob; at: number; size: number }
+
+export function saveTtsAudio(key: string, blob: Blob): Promise<void> {
+  const record: TtsAudioRecord = { blob, at: Date.now(), size: blob.size };
+  return openDatabase().then((db) => new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(TTS_AUDIO_STORE, 'readwrite');
+    transaction.objectStore(TTS_AUDIO_STORE).put(record, key);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  }));
+}
+
+export function getTtsAudio(key: string): Promise<Blob | null> {
+  return openDatabase().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction(TTS_AUDIO_STORE, 'readonly').objectStore(TTS_AUDIO_STORE).get(key);
+    request.onsuccess = () => resolve((request.result as TtsAudioRecord | undefined)?.blob || null);
+    request.onerror = () => reject(request.error);
+  }));
+}
+
+export const deleteTtsAudio = (key: string) => removeBlob(TTS_AUDIO_STORE, key);
+
+/** 读出全部条目的键/时间/体积（不含字节），供有界淘汰排序。 */
+export function listTtsAudioMeta(): Promise<{ key: string; at: number; size: number }[]> {
+  return openDatabase().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(TTS_AUDIO_STORE, 'readonly');
+    const store = tx.objectStore(TTS_AUDIO_STORE);
+    const keysReq = store.getAllKeys();
+    const valsReq = store.getAll();
+    tx.oncomplete = () => {
+      const keys = keysReq.result as IDBValidKey[];
+      const vals = valsReq.result as TtsAudioRecord[];
+      resolve(keys.map((k, i) => ({ key: String(k), at: vals[i]?.at || 0, size: vals[i]?.size || 0 })));
+    };
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+/** 有界淘汰：超出条数或总体积时删最旧，返回删除数。失败安静返回 0（不影响播放）。 */
+export async function trimTtsAudio(maxEntries: number, maxBytes: number): Promise<number> {
+  try {
+    const meta = await listTtsAudioMeta();
+    let total = meta.reduce((sum, m) => sum + m.size, 0);
+    if (meta.length <= maxEntries && total <= maxBytes) return 0;
+    const oldest = [...meta].sort((a, b) => a.at - b.at);
+    let removed = 0;
+    for (const item of oldest) {
+      if (meta.length - removed <= maxEntries && total <= maxBytes) break;
+      await deleteTtsAudio(item.key);
+      total -= item.size;
+      removed += 1;
+    }
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+
+/** 清空本机全部 TTS 合成缓存（设置页「清空缓存」用）。失败安静忽略。 */
+export function clearTtsAudio(): Promise<void> {
+  return openDatabase().then((db) => new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(TTS_AUDIO_STORE, 'readwrite');
+    tx.objectStore(TTS_AUDIO_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  })).catch(() => undefined);
 }

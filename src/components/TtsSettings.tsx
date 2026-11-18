@@ -1,10 +1,17 @@
-import { useState } from 'react';
-import { Check, FlaskConical, KeyRound, Volume2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Check, Cloud, Database, FlaskConical, KeyRound, Trash2, Volume2 } from 'lucide-react';
 import {
-  DASHSCOPE_VOICES, OPENAI_VOICES, defaultTtsConfig, isTtsConfigured, synthesizeTts,
+  DASHSCOPE_VOICES, OPENAI_VOICES, clearTtsCache, defaultTtsConfig, isTtsConfigured, synthesizeTts,
   type TtsConfig, type TtsProvider,
 } from '../lib/qwenTts';
+import { clearDurableTts, ttsCacheStats } from '../lib/ttsCache';
 import { Button, Segmented } from './UI';
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const PROVIDER_OPTIONS: { value: TtsProvider; label: string }[] = [
   { value: 'off', label: '关闭' },
@@ -19,8 +26,25 @@ export default function TtsSettingsCard({ tts, onTts, onNotify }: {
   onNotify?: (message: string, tone?: 'error' | 'success') => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [stats, setStats] = useState<{ count: number; bytes: number; ossReady: boolean } | null>(null);
   const config = tts ?? defaultTtsConfig();
   const configured = isTtsConfigured(config);
+
+  const refreshStats = useCallback(() => { void ttsCacheStats().then(setStats); }, []);
+  useEffect(() => { refreshStats(); }, [refreshStats]);
+
+  const clearCache = async () => {
+    setClearing(true);
+    try {
+      await clearDurableTts();
+      clearTtsCache();
+      refreshStats();
+      onNotify?.('已清空本机发音缓存', 'success');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const patchDashscope = (patch: Partial<TtsConfig['dashscope']>) => onTts({ ...config, dashscope: { ...config.dashscope, ...patch } });
   const patchOpenai = (patch: Partial<TtsConfig['openai']>) => onTts({ ...config, openai: { ...config.openai, ...patch } });
@@ -34,6 +58,7 @@ export default function TtsSettingsCard({ tts, onTts, onNotify }: {
       const audio = new Audio(url);
       await audio.play().catch(() => undefined);
       onNotify?.('试听成功，发音兜底已启用', 'success');
+      refreshStats();
     } finally {
       setBusy(false);
     }
@@ -77,6 +102,15 @@ export default function TtsSettingsCard({ tts, onTts, onNotify }: {
           <Button variant="secondary" size="sm" disabled={busy || !configured} onClick={() => void preview()}><FlaskConical size={15} />{busy ? '合成中…' : '试听'}</Button>
         </div>
       )}
+
+      <div className="tts-cache">
+        <div className="tts-cache-info">
+          <span className="tts-cache-stat"><Database size={14} />本机缓存 {stats ? `${stats.count} 段 · ${formatBytes(stats.bytes)}` : '…'}</span>
+          <span className={`tts-cache-oss ${stats?.ossReady ? 'on' : ''}`}><Cloud size={14} />{stats?.ossReady ? '已连接共享缓存，跨设备复用' : '登录后可跨设备共享缓存'}</span>
+        </div>
+        <Button variant="ghost" size="sm" disabled={clearing || !stats || stats.count === 0} onClick={() => void clearCache()}><Trash2 size={15} />{clearing ? '清空中…' : '清空缓存'}</Button>
+      </div>
+      <p className="tts-hint">合成过的发音会缓存到本机（刷新/离线 0 重复请求）；登录态再共享到云端 OSS，同一句全网只合成一次。清空只删本机副本，不影响云端共享。</p>
     </section>
   );
 }

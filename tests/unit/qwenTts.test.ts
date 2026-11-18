@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_DASHSCOPE_HOST, clearTtsCache, dashscopeHost, defaultTtsConfig, isTtsConfigured,
-  synthesizeTts, ttsCacheKey, type TtsConfig,
+  synthesizeTts, ttsCacheKey, ttsNamespace, type TtsConfig,
 } from '../../src/lib/qwenTts';
+import { blobToBase64 } from '../../src/lib/ttsCache';
 
 const dashscope = (overrides: Partial<TtsConfig['dashscope']> = {}): TtsConfig => ({
   ...defaultTtsConfig(),
@@ -134,4 +135,22 @@ test('synthesizeTts：同文本+音色命中会话缓存，不重复请求', asy
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('ttsNamespace：区分协议/模型/OpenAI 端点 host，避免共享缓存撞键', () => {
+  assert.ok(ttsNamespace(dashscope()).startsWith('r1ds|'));
+  assert.ok(ttsNamespace(openai()).startsWith('r1oa|'));
+  assert.notEqual(ttsNamespace(dashscope({ model: 'qwen3-tts-flash' })), ttsNamespace(dashscope({ model: 'qwen3-tts' })));
+  assert.notEqual(
+    ttsNamespace(openai({ baseUrl: 'https://api.openai.com/v1' })),
+    ttsNamespace(openai({ baseUrl: 'https://api.siliconflow.cn/v1' })),
+  );
+  assert.ok(ttsNamespace(openai()).length <= 64);
+});
+
+test('blobToBase64：字节往返一致（供 OSS 落盘 data 字段）', async () => {
+  const bytes = new Uint8Array([0, 1, 2, 250, 255, 65, 66]);
+  const b64 = await blobToBase64(new Blob([bytes]));
+  const back = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  assert.deepEqual(Array.from(back), Array.from(bytes));
 });
