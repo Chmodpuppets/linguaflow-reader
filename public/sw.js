@@ -1,3 +1,5 @@
+// v13：词库真人录音（跨域 OSS，无 CORS）进独立有界缓存 atlas-audio-v1，cache-first，
+//      离线/重复发音直接命中本地真人录音；该缓存跨部署保留（activate 不清）。
 // v12：导航 network-first（联网拿最新 index.html，断网回退预缓存外壳），
 //      修复部署后旧入口引用已下线旧 hash chunk 导致的动态导入 404。
 // v11：install 读取构建期 precache-manifest.json，补齐所有懒加载 chunk，离线首启可用。
@@ -26,6 +28,41 @@ function cacheable(url) {
 const RUNTIME_CACHE = `${CACHE}-runtime`;
 const MAX_RUNTIME_ENTRIES = 120;
 let putsSinceTrim = 0;
+
+// 词库真人录音缓存：跨域 OSS 未配 CORS，页面 fetch() 拿不到 blob，但媒体元素播放会经过 SW，
+// 这里以 no-cors 取 opaque 整段缓存（短录音约 9KB/段，无需 Range/seek）。独立有界、跨部署保留。
+const ATLAS_AUDIO_CACHE = 'atlas-audio-v1';
+const ATLAS_AUDIO_HOST = 'pathmora.oss-cn-beijing.aliyuncs.com';
+const ATLAS_AUDIO_PREFIX = '/atlas/v1/audio/';
+const MAX_AUDIO_ENTRIES = 400; // 约 4MB 上限，超出按写入顺序裁剪最旧
+let audioPutsSinceTrim = 0;
+
+async function trimAudioCache(cache) {
+  audioPutsSinceTrim += 1;
+  if (audioPutsSinceTrim < 25) return;
+  audioPutsSinceTrim = 0;
+  const keys = await cache.keys();
+  if (keys.length <= MAX_AUDIO_ENTRIES) return;
+  for (const key of keys.slice(0, keys.length - MAX_AUDIO_ENTRIES)) await cache.delete(key);
+}
+
+async function atlasAudioResponse(request) {
+  const cache = await caches.open(ATLAS_AUDIO_CACHE);
+  // 缓存键只用 URL（忽略 Range 头）：短录音整段缓存，命中即回，离线也能播真人录音。
+  const cached = await cache.match(request.url);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request.url, { mode: 'no-cors' });
+    if (response && (response.status === 200 || response.type === 'opaque')) {
+      await cache.put(request.url, response.clone());
+      await trimAudioCache(cache);
+    }
+    return response;
+  } catch {
+    // 离线且未缓存：返回空 504，页面 atlasAudio 的 error 回调会回退浏览器 TTS。
+    return new Response('', { status: 504, statusText: 'Offline' });
+  }
+}
 
 async function trimRuntimeCache(cache) {
   putsSinceTrim += 1;
@@ -66,10 +103,19 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))));
+  // 保留外壳缓存与词库录音缓存（录音跨部署持久，离线发音不丢）；其余旧缓存清掉。
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== ATLAS_AUDIO_CACHE).map((key) => caches.delete(key)))));
   self.clients.claim();
 });
 self.addEventListener('fetch', (event) => {
+  // 词库真人录音（跨域 OSS）：先于同源判断拦截，cache-first 缓存 opaque 整段。
+  if (event.request.method === 'GET') {
+    const audioUrl = new URL(event.request.url);
+    if (audioUrl.hostname === ATLAS_AUDIO_HOST && audioUrl.pathname.startsWith(ATLAS_AUDIO_PREFIX)) {
+      event.respondWith(atlasAudioResponse(event.request));
+      return;
+    }
+  }
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) return;
   // 媒体元素的 Range 请求返回 206，cache.put 不支持且会抛错；直接透传网络，
   // 拖进度条、seek 都依赖 Range，绝不能进缓存路径。

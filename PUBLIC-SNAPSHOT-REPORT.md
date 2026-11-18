@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：177
-总大小：1.87 MB
+文件数：178
+总大小：1.88 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -126,6 +126,7 @@
 - `src/voice.css`
 - `src/workers/whisper.worker.ts`
 - `tests/annotation.spec.ts`
+- `tests/atlas-cache.spec.ts`
 - `tests/atlas.spec.ts`
 - `tests/backup.spec.ts`
 - `tests/base.ts`
