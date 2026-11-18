@@ -4,6 +4,7 @@ import type { SavedSentence, VocabEntry } from '../types';
 import { downloadText, formatDate } from '../lib/utils';
 import { cardsFromSentences, cardsFromVocab, mergeCards, toAnkiTsv, toCsv } from '../lib/exportCards';
 import { parseKnownWords } from '../lib/knownWords';
+import { speakWordNatural } from '../lib/atlasAudio';
 import { Button, EmptyState, Modal, Segmented } from './UI';
 
 type SortKey = 'recent' | 'word' | 'familiarity';
@@ -48,7 +49,7 @@ export default function Vocabulary({ entries, sentences, onOpenSource, onReview,
   const toggleFlip = (id: string) => setFlipped((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const toggleSelect = (id: string) => setSelectedIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
-  const speak = (word: string) => { const utterance = new SpeechSynthesisUtterance(word); utterance.lang = 'en-US'; window.speechSynthesis?.speak(utterance); };
+  const speak = (word: string) => { void speakWordNatural(word); };
 
   return <div className="page vocabulary-page page-enter"><div className="page-heading"><div><span className="eyebrow">WORDS WITH A HOME</span><h1>每一个词，都回到它的语境。</h1><p>不是孤立的词表，是你真正读过、选过、想记住的表达。</p></div><Button onClick={onReview} disabled={!entries.length}><Brain size={17} />开始复习</Button></div>
     <div className="stats-row"><div className="stat-card glass-panel"><span>COLLECTED</span><strong>{entries.length}</strong><small>语境词汇</small></div><div className="stat-card glass-panel"><span>FAMILIAR</span><strong>{mastered}</strong><small>熟悉词汇</small></div><div className="stat-card glass-panel"><span>SOURCES</span><strong>{new Set(entries.map((entry) => entry.bookId)).size}</strong><small>来源书籍</small></div></div>

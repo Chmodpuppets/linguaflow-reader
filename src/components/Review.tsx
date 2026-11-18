@@ -6,6 +6,7 @@ import { fetchFallbackPlan, fetchReaderPlan, getSyncToken, isSyncEnabled, type R
 import { sentenceToReviewEntry } from '../lib/sentence';
 import { dictationCorrect } from '../lib/dictation';
 import { normalizeForCompare } from '../lib/phrase';
+import { speakWordNatural } from '../lib/atlasAudio';
 
 type Mode = 'flashcard' | 'cloze' | 'sentence' | 'dictation';
 type Result = ReviewLog['result'];
@@ -26,7 +27,7 @@ export default function Review({ entries, sentences, onReview, onReviewSentence,
   const due = useMemo(() => entries.filter((entry) => new Date(entry.dueAt).getTime() <= Date.now()).length, [entries]);
   const cloze = current ? current.context.replace(new RegExp(current.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '_____') : '';
   const correct = current ? (mode === 'dictation' ? dictationCorrect(current.word, answer) : normalizeForCompare(answer) === normalizeForCompare(current.word)) : false;
-  const speakWord = (slow: boolean) => { if (!current || typeof window.speechSynthesis === 'undefined') return; const utterance = new SpeechSynthesisUtterance(current.word); utterance.lang = 'en-US'; utterance.rate = slow ? 0.55 : 0.95; window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance); };
+  const speakWord = (slow: boolean) => { if (!current) return; void speakWordNatural(current.word, { slow }); };
   // 听写：每进入一个新词自动读一遍（开始按钮的用户手势之后，允许发声）。
   useEffect(() => { if (mode === 'dictation' && started && !finished && current) speakWord(false); }, [mode, started, finished, index]);
   // 连接账号后优先拉取 pathmora 下发的今日计划；不可达时用已部署的 linguaflow 学习记录做本地降级计划；
