@@ -1,3 +1,5 @@
+import type { TtsConfig } from './lib/qwenTts';
+
 export type Page = 'library' | 'vocabulary' | 'review' | 'voice-lab' | 'voice-analytics' | 'notes' | 'settings';
 export type ReaderTheme = 'midnight' | 'sepia' | 'paper';
 
@@ -135,6 +137,8 @@ export interface ReaderSettings {
   annotationMode?: 'off' | 'learning' | 'all';
   /** 每日学习目标（学习动作数：查词标记/收藏/复习/跟读）。旧数据回退 5。 */
   dailyGoal?: number;
+  /** 用户自带 Qwen TTS（两种接入协议）。旧数据无此字段时回退默认（关闭，纯浏览器 TTS）。 */
+  tts?: TtsConfig;
 }
 
 /** 词状态：new（未标记，默认）/ learning（学习中，显示注音）/ known（已掌握，移除注音）。 */

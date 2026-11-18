@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Volume2 } from 'lucide-react';
 import type { PracticeTarget, TargetGroup } from '../lib/practiceTargets';
 import { metaFor, wordCount, type PracticeMeta } from '../lib/practiceMeta';
+import { speak as ttsSpeak, stopSpeech } from '../lib/tts';
 
 const TABS: { group: TargetGroup; label: string }[] = [
   { group: 'sentence', label: '我的收藏句' },
@@ -35,16 +36,9 @@ export default function PracticePicker({ targets, customTarget, selectedId, meta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targets, customTarget]);
 
-  useEffect(() => () => { window.speechSynthesis?.cancel(); }, []);
+  useEffect(() => () => { stopSpeech(); }, []);
 
-  const speak = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  };
+  const speak = (text: string) => ttsSpeak(text, { rate: 0.95, lang: 'en-US' });
 
   if (allTargets.length === 0) {
     return <p className="practice-empty-hint">还没有收藏句或标记。先在阅读页轻点单词「收藏句子」、或划选做标记；也可以导入一本书，书中段落会作为兜底参考出现在这里。</p>;

@@ -18,6 +18,8 @@ import { computeKnownWords } from './lib/knownWords';
 import { computeStreak, todayActions, wordStateCounts } from './lib/streak';
 import { breakLongParagraphs } from './lib/sentence';
 import { BUILTIN_BOOK_IDS, builtinShelfEnabled } from './lib/builtinShelf';
+import { setTtsConfig } from './lib/tts';
+import { clearTtsCache, defaultTtsConfig } from './lib/qwenTts';
 import type { AppData, Book, Highlight, LibraryView, Page, ReaderSettings, ReviewLog, SavedSentence, VocabEntry, VoiceRecord, WordGloss, WordState } from './types';
 import { addBookToPlaylist, removeBookFromPlaylist } from './lib/playlist';
 
@@ -112,6 +114,8 @@ export default function App() {
 
   // 学习记录上云（opt-in）：联网恢复 / 周期补传离线队列。未开启同步时不做任何事。
   useEffect(() => { startLearningSync(); }, []);
+  // 用户自带 Qwen TTS：把设置注册到中央朗读引擎；配置变更时清掉旧音色/端点的会话缓存。
+  useEffect(() => { clearTtsCache(); setTtsConfig(data.settings.tts ?? defaultTtsConfig()); }, [data.settings.tts]);
   // 开启同步且缓存过期时刷新已知词（供难度匹配）；回到书库时再检查，连接账号后即刻生效。
   // 不可达保留缓存 / 本地回退。
   useEffect(() => {

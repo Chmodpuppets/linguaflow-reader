@@ -1,6 +1,7 @@
 /** Word Atlas 发音播放：优先真人录音（自有 OSS），无媒体或加载失败时回退浏览器 TTS，保证始终能发音。
  *  供查词面板主发音按钮、AtlasCard 英美发音按钮、词汇本与复习的单词发音共用，行为一致。 */
 import { atlasMediaUrls, lookupAtlas, type AtlasWord } from './wordAtlas';
+import { speak, stopSpeech } from './tts';
 
 let currentAudio: HTMLAudioElement | null = null;
 
@@ -11,21 +12,16 @@ function stopCurrentAudio(): void {
   }
 }
 
-/** 浏览器 TTS 兜底朗读（无录音可用时）。 */
+/** 无录音时的兜底朗读：交给中央引擎（用户配置的 Qwen TTS 优先，否则浏览器 TTS）。 */
 export function speakText(text: string, rate = 0.95): void {
   stopCurrentAudio();
-  if (typeof speechSynthesis === 'undefined') return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  u.rate = rate;
-  speechSynthesis.speak(u);
+  speak(text, { rate, lang: 'en-US' });
 }
 
 /** 有录音 URL 就播真人录音（失败回退 TTS）；没有则直接 TTS。切换发音时停掉上一段，避免叠音。 */
 export function playAtlasAudio(url: string | undefined, text: string): void {
   stopCurrentAudio();
-  if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+  stopSpeech();
   if (url) {
     const audio = new Audio(url);
     currentAudio = audio;

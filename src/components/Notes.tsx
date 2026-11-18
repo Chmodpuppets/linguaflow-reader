@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, Highlighter, MapPin, NotebookPen, Quote, Search, 
 import type { Book, Highlight, SavedSentence } from '../types';
 import { formatDate } from '../lib/utils';
 import { sentenceParts } from '../lib/sentence';
+import { speak as ttsSpeak } from '../lib/tts';
 import { EmptyState } from './UI';
 
 export default function Notes({ highlights, sentences, books, onOpenSource, onDelete, onDeleteSentence }: { highlights: Highlight[]; sentences: SavedSentence[]; books: Book[]; onOpenSource: (item: { bookId: string; chapterId: string; paragraphIndex: number }) => void; onDelete: (id: string) => void; onDeleteSentence: (id: string) => void }) {
@@ -10,14 +11,7 @@ export default function Notes({ highlights, sentences, books, onOpenSource, onDe
   const needle = query.toLowerCase();
   const filtered = highlights.filter((item) => `${item.text} ${item.note}`.toLowerCase().includes(needle));
   const filteredSentences = sentences.filter((item) => `${item.text} ${item.word} ${item.meaning}`.toLowerCase().includes(needle));
-  const speak = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
-  };
+  const speak = (text: string) => ttsSpeak(text, { rate: 0.9, lang: 'en-US' });
   return <div className="page notes-page page-enter">
     <div className="page-heading"><div><span className="eyebrow">THINK WITH THE TEXT</span><h1>标记，是与原文的一次对话。</h1><p>保留触动你的句子，也保留你当时的想法。</p></div></div>
     <div className="list-toolbar"><label className="search-box"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索句子、标记或笔记" /></label><span className="result-count">{sentences.length + highlights.length} 条记录</span></div>

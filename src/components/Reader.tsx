@@ -6,6 +6,7 @@ import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
 import { lookupAtlas, loadAtlasIndex, atlasGloss, atlasIndexReady, atlasMediaUrls, type AtlasWord } from '../lib/wordAtlas';
 import { playAtlasAudio } from '../lib/atlasAudio';
+import { speak as ttsSpeak } from '../lib/tts';
 import AtlasCard from './AtlasCard';
 import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
@@ -336,12 +337,8 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
   };
 
   const speakSentence = () => {
-    if (!('speechSynthesis' in window) || !lookupSentence) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(lookupSentence);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    window.speechSynthesis.speak(utterance);
+    if (!lookupSentence) return;
+    ttsSpeak(lookupSentence, { rate: 0.9, lang: 'en-US' });
   };
 
   const copySentence = () => {
@@ -349,14 +346,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     void navigator.clipboard?.writeText(lookupSentence).then(() => onNotify('句子已复制到剪贴板')).catch(() => onNotify('复制失败，请手动选择文本', 'error'));
   };
 
-  const speak = (word: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.85;
-    window.speechSynthesis.speak(utterance);
-  };
+  const speak = (word: string) => ttsSpeak(word, { rate: 0.9, lang: 'en-US' });
 
   // 查词面板主发音按钮：优先 Word Atlas 真人录音（美式→英式，自有 OSS），词库未收录或无录音才回退 TTS。
   const speakLookupWord = () => {

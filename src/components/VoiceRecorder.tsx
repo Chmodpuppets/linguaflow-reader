@@ -9,6 +9,7 @@ import { makeId } from '../lib/utils';
 import { classifyProsody, intelligibilityGaps, wordFeaturesFromBuffer, type ProsodyWord } from '../lib/prosody';
 import { pickFocus, selfCompareText, SELF_OPTIONS, type FocusPoint } from '../lib/focus';
 import { complexityOf, complexitySuggestion, COMPLEXITY_NOTE } from '../lib/complexity';
+import { speak, stopSpeech } from '../lib/tts';
 import { Button } from './UI';
 
 type SttEngine = 'native' | 'whisper';
@@ -116,7 +117,7 @@ function ReferenceTrack({ audioUrl, bookId, targetText }: { audioUrl?: string; b
 
   useEffect(() => () => {
     cancelAnimationFrame(frameRef.current);
-    window.speechSynthesis?.cancel();
+    stopSpeech();
     closeAudioContext(audioContextRef.current);
     audioContextRef.current = null;
     connectedElRef.current = null;
@@ -160,14 +161,9 @@ function ReferenceTrack({ audioUrl, bookId, targetText }: { audioUrl?: string; b
   const toggle = () => {
     if (!playable) {
       if (!ttsAvailable) return;
-      if (playing) { window.speechSynthesis.cancel(); setPlaying(false); return; }
-      const utterance = new SpeechSynthesisUtterance(targetText);
-      utterance.lang = 'en-US';
-      utterance.rate = rate * 0.9;
-      utterance.onend = () => setPlaying(false);
-      // TTS 失败（无语音包 / 被策略拦截）时不能让 playing 卡在 true。
-      utterance.onerror = () => setPlaying(false);
-      window.speechSynthesis.speak(utterance);
+      if (playing) { stopSpeech(); setPlaying(false); return; }
+      // 中央引擎：用户配置的 Qwen TTS 优先，失败/慢速回退浏览器 TTS；onEnd/onError 复位 playing。
+      speak(targetText, { rate: rate * 0.9, lang: 'en-US', onEnd: () => setPlaying(false), onError: () => setPlaying(false) });
       setPlaying(true);
       return;
     }
@@ -580,12 +576,7 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
   };
 
   const gaps = result ? intelligibilityGaps(result.diffTokens) : [];
-  const speakWords = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    window.speechSynthesis.speak(utterance);
-  };
+  const speakWords = (text: string) => speak(text, { lang: 'en-US' });
 
   const prepareWhisper = async (target: WhisperModelId) => {
     if (!whisperSupported) { setError('当前浏览器不支持本地模型转写（需要 Worker + WebAssembly）。'); return; }
@@ -678,7 +669,7 @@ export default function VoiceRecorder({ targetText, mode, audioUrl, bookId, note
       {showDiag && selfReport && <div className="self-compare">{selfCompareText(selfReport, focus)}</div>}
       {showDiag && <>
       {focus && <div className="focus-card"><span className="eyebrow">ONE THING AT A TIME</span><strong>{focus.title}</strong><p>{focus.advice}</p><div className="panel-actions"><Button size="sm" onClick={() => setNextFocus(focus)}>下一轮只练这个</Button>{focus.word && <Button size="sm" variant="secondary" onClick={() => speakWords(focus.word!)}><Volume2 size={15} />听这个词</Button>}</div></div>}
-      {result.diffTokens.length > 0 && <div className="diff-panel"><div className="diff-legend"><span><i className="green" />匹配</span><span><i className="yellow" />低置信度</span><span><i className="red" />漏读 / 替换</span></div><div className="diff-tokens">{result.diffTokens.map((token, index) => <button key={`${token.text}-${index}`} className={`diff-${token.status}`} title={token.spoken ? `识别为：${token.spoken}` : '这个词没有被识别到'} onClick={() => { if (!('speechSynthesis' in window)) return; const utterance = new SpeechSynthesisUtterance(token.text); utterance.lang = 'en-US'; window.speechSynthesis.speak(utterance); }}>{token.text}</button>)}</div><p>点击词可听标准音。词级 Diff 来自 STT 对齐，不等同于音素评分。</p></div>}
+      {result.diffTokens.length > 0 && <div className="diff-panel"><div className="diff-legend"><span><i className="green" />匹配</span><span><i className="yellow" />低置信度</span><span><i className="red" />漏读 / 替换</span></div><div className="diff-tokens">{result.diffTokens.map((token, index) => <button key={`${token.text}-${index}`} className={`diff-${token.status}`} title={token.spoken ? `识别为：${token.spoken}` : '这个词没有被识别到'} onClick={() => speak(token.text, { lang: 'en-US' })}>{token.text}</button>)}</div><p>点击词可听标准音。词级 Diff 来自 STT 对齐，不等同于音素评分。</p></div>}
       {gaps.length > 0 && <div className="intelligibility-panel"><div className="panel-head"><span className="eyebrow">INTELLIGIBILITY</span><strong>有 {gaps.length} 个词可能没被听懂</strong></div><ul className="intelligibility-list">{gaps.map((gap, index) => <li key={`${gap.word}-${index}`}><button className="gap-word" onClick={() => speakWords(gap.word)} title="听标准音">{gap.word}</button><span className="gap-note">{gap.kind === 'substitute' ? `识别成了 “${gap.spoken}”` : '未识别到'}</span></li>)}</ul><div className="panel-actions"><Button size="sm" variant="secondary" onClick={() => speakWords(gaps.map((g) => g.word).join(', '))}><Volume2 size={15} />听标准音</Button><span className="panel-hint">重录时重点读这些词。这是「机器可能没听清」，不是「你读错了」。</span></div></div>}
       {prosody && prosody.length > 0 && <div className="prosody-panel"><div className="panel-head"><span className="eyebrow">PROSODY · 节奏对比</span><strong>重音与拖长</strong></div><div className="prosody-row"><span className="prosody-label">TARGET</span><div className="prosody-words">{prosody.map((p, i) => <span key={`t-${p.word}-${i}`} className="prosody-word target">{p.word}</span>)}</div></div><div className="prosody-row"><span className="prosody-label">YOURS</span><div className="prosody-words">{prosody.map((p, i) => <span key={`u-${p.word}-${i}`} className={`prosody-word ${p.status}`} title={p.status === 'weak' ? '该重读却弱读' : p.status === 'long' ? '该弱读却拖长' : '节奏匹配'}>{p.word}</span>)}</div></div><div className="diff-legend"><span><i className="green" />节奏匹配</span><span><i className="yellow" />弱读拖长</span><span><i className="red" />重音缺失</span></div><p>节奏相似度，不等同于发音正确度。</p></div>}
       {complexity && <div className="complexity-panel">

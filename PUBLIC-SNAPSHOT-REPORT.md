@@ -1,8 +1,8 @@
 # 公开快照审计报告
 
 快照目录：/tmp/linguaflow-reader-public
-文件数：178
-总大小：1.88 MB
+文件数：183
+总大小：1.91 MB
 
 结论：✅ 未发现版权素材或书籍正文
 
@@ -65,6 +65,7 @@
 - `src/components/Review.tsx`
 - `src/components/Settings.tsx`
 - `src/components/StorageUsage.tsx`
+- `src/components/TtsSettings.tsx`
 - `src/components/UI.tsx`
 - `src/components/Vocabulary.tsx`
 - `src/components/VoiceAnalytics.tsx`
@@ -106,6 +107,7 @@
 - `src/lib/practiceMeta.ts`
 - `src/lib/practiceTargets.ts`
 - `src/lib/prosody.ts`
+- `src/lib/qwenTts.ts`
 - `src/lib/remoteDictionary.ts`
 - `src/lib/searchLibrary.ts`
 - `src/lib/sentence.ts`
@@ -114,6 +116,7 @@
 - `src/lib/subtitle.ts`
 - `src/lib/textBook.ts`
 - `src/lib/translate.ts`
+- `src/lib/tts.ts`
 - `src/lib/utils.ts`
 - `src/lib/voice.ts`
 - `src/lib/whisper.ts`
@@ -148,6 +151,7 @@
 - `tests/subtitle.spec.ts`
 - `tests/sync.spec.ts`
 - `tests/translate.spec.ts`
+- `tests/tts.spec.ts`
 - `tests/undo.spec.ts`
 - `tests/unit/alignment.test.ts`
 - `tests/unit/annotation.test.ts`
@@ -176,6 +180,7 @@
 - `tests/unit/practiceMeta.test.ts`
 - `tests/unit/practiceTargets.test.ts`
 - `tests/unit/prosody.test.ts`
+- `tests/unit/qwenTts.test.ts`
 - `tests/unit/recommend.test.ts`
 - `tests/unit/searchLibrary.test.ts`
 - `tests/unit/sentence.test.ts`

@@ -12,6 +12,10 @@ export function validateBackup(parsed: unknown): AppData {
   const settings = raw.settings as Record<string, unknown> | undefined;
   if (!settings || typeof settings.fontSize !== 'number' || typeof settings.lineHeight !== 'number') throw new Error('阅读版式设置不完整');
   if (!['midnight', 'sepia', 'paper'].includes(String(settings.theme))) throw new Error('主题设置无法识别');
+  if (settings.tts !== undefined) {
+    const tts = settings.tts as Record<string, unknown> | null;
+    if (!tts || !['off', 'dashscope', 'openai'].includes(String(tts.provider))) throw new Error('语音朗读（TTS）设置无法识别');
+  }
   const str = (value: unknown) => typeof value === 'string';
   const num = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
   (raw.books as unknown[]).forEach((item, index) => {
