@@ -4,7 +4,8 @@ import type { Book, DictionaryEntry, Highlight, ReaderSettings, SavedSentence, S
 import { chapterStats, rubyGlossFor, type AnnotationMode } from '../lib/annotation';
 import { lookupWord, normalizeWord } from '../data/dictionary';
 import { fetchRemoteDictionary } from '../lib/remoteDictionary';
-import { lookupAtlas, loadAtlasIndex, atlasGloss, atlasIndexReady, type AtlasWord } from '../lib/wordAtlas';
+import { lookupAtlas, loadAtlasIndex, atlasGloss, atlasIndexReady, atlasMediaUrls, type AtlasWord } from '../lib/wordAtlas';
+import { playAtlasAudio } from '../lib/atlasAudio';
 import AtlasCard from './AtlasCard';
 import { recordEvent } from '../lib/learning';
 import { extractSentence, sentenceParts } from '../lib/sentence';
@@ -357,6 +358,14 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     window.speechSynthesis.speak(utterance);
   };
 
+  // 查词面板主发音按钮：优先 Word Atlas 真人录音（美式→英式，自有 OSS），词库未收录或无录音才回退 TTS。
+  const speakLookupWord = () => {
+    if (!lookup) return;
+    const word = normalizeWord(lookup.word);
+    const media = atlasData ? atlasMediaUrls(atlasData.id, atlasData.media) : null;
+    playAtlasAudio(media?.us || media?.uk, word);
+  };
+
   const goToChapter = (index: number) => {
     if (index < 0 || index >= book.chapters.length) return;
     setChapterIndex(index);
@@ -427,7 +436,7 @@ export default function Reader({ book, settings, highlights, savedWords, sentenc
     {lookup && <div className="lookup-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLookup(null); }}>
       <section className="lookup-panel glass-panel" aria-label="查词面板">
         <div className="lookup-grabber" />
-        <div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : (lookup && remote?.word === lookup.word && remote.entry) ? (remote.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : atlasData ? 'WORD ATLAS · 词光' : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speak(normalizeWord(lookup.word))} aria-label="朗读单词"><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)} aria-label="关闭查词面板"><X size={20} /></button></div>
+        <div className="lookup-head"><div><span className="eyebrow">{localDict ? 'LOCAL DICTIONARY' : (lookup && remote?.word === lookup.word && remote.entry) ? (remote.source === 'server' ? 'SERVER DICTIONARY · 英汉' : 'ONLINE DICTIONARY') : atlasData ? 'WORD ATLAS · 词光' : 'DICTIONARY'}</span><div className="lookup-word"><h2>{normalizeWord(lookup.word)}</h2><button className="icon-button" onClick={() => speakLookupWord()} aria-label="朗读单词"><Volume2 size={19} /></button></div><span className="phonetic">{dictionary?.phonetic || (remoteLoading ? '正在查询服务器词典…' : '暂无音标')} {dictionary && dictionary.partOfSpeech && <i>{dictionary.partOfSpeech}</i>}</span></div><button className="icon-button" onClick={() => setLookup(null)} aria-label="关闭查词面板"><X size={20} /></button></div>
         <div className="dictionary-section lookup-definition"><span className="dictionary-number">01</span><div><h3>释义</h3>{dictionary ? <><p className="dictionary-meaning">{dictionary.meaning}</p>{dictionary.chinese && <p className="dictionary-cn">{dictionary.chinese}</p>}</> : remoteLoading ? <p className="dictionary-meaning muted">本地词库未收录，正在查询服务器词典…</p> : <p className="dictionary-meaning muted">本地与在线词典都暂未收录这个词（离线时仅用本地词库）。你仍可将它和原句一起收藏，之后补充讲解。</p>}</div></div>
         <div className="word-state-row" role="group" aria-label="词状态">
           <button className={`state-btn learning ${lookupState === 'learning' ? 'on' : ''}`} onClick={() => markState('learning')}>{lookupState === 'learning' ? <Check size={15} /> : <Plus size={15} />}学习中 · 显示注音</button>

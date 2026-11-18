@@ -122,3 +122,22 @@ test('Word Atlas 竞态：索引延迟就绪时，先点的词在索引加载后
   await expect(card.locator('.atlas-cefr')).toHaveText('A2');
   expect(pageErrors).toEqual([]);
 });
+
+test('Word Atlas 发音：查词面板主发音按钮播放 OSS 真人录音，而非浏览器 TTS', async ({ page }) => {
+  await mockAtlas(page);
+  // 录音 mock 成空音频（headless 无声卡，play 可能 reject→TTS 兜底，但请求仍会发出）。
+  await page.route('**/atlas/v1/audio/**', (route) => route.fulfill({ contentType: 'audio/mpeg', body: Buffer.from([]) }));
+  await page.route('**/api/dict/lookup*', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ found: true, lang: 'en', word: 'curious', phonetic: 'ˈkjʊəriəs', meaning: 'a. 好奇的', pos: 'a' }),
+  }));
+  await importBook(page);
+  await page.locator('.chapter-body .word[data-word="curious"]').click();
+  await expect(page.locator('.lookup-panel .atlas-card')).toBeVisible({ timeout: 10000 });
+
+  // 点主发音按钮（词头旁）：应请求 OSS 美式真人录音（fixture id=w1，media 含 US 位）。
+  const reqPromise = page.waitForRequest('**/atlas/v1/audio/us/w1.mp3', { timeout: 8000 });
+  await page.locator('.lookup-panel button[aria-label="朗读单词"]').click();
+  const req = await reqPromise;
+  expect(req.url()).toContain('pathmora.oss-cn-beijing.aliyuncs.com/atlas/v1/audio/us/w1.mp3');
+});
